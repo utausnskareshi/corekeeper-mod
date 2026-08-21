@@ -1,0 +1,71 @@
+A single game character sprite for a top-down pixel-art game, drawn as flat 2D artwork.
+
+SUBJECT: {{CHARACTER}}
+(Replace the line above with ONE character description. Do not list several.)
+
+THE THREE RULES THAT MATTER MOST
+If anything below conflicts with these, these win. The picture is going to be shrunk into a
+16 x 19 pixel box, and the character itself ends up about 13 x 19 pixels inside it. These
+three are what decide whether it survives that.
+
+1. SHAPE: the character must be SHORT AND STOCKY. Its total width must be 0.65 to 0.7 of its
+   total height. A tall, slim figure is wrong, however good it looks on its own.
+2. GRID: draw it as a coarse pixel sprite. The character must be exactly 19 logical pixels
+   tall, and every logical pixel must be a solid uniform square block at least 40 x 40
+   screen pixels in size. Nothing may be smaller than one whole block.
+3. COLOUR: flat blocks of colour only, no more than 10 colours in the whole image, and no
+   anti-aliasing at all. Every edge must be a hard step between two blocks, never a blend.
+
+CANVAS
+- Portrait or square is fine. Roughly 1024 x 1024 is a good size.
+- Background fully transparent (alpha 0). If transparency is not possible, fill the entire
+  background with solid pure magenta #FF00FF and use that colour nowhere on the character.
+- No scenery, no ground, no shadow, no border, no text, no watermark.
+- Exactly one character, seen strictly from the FRONT, standing upright, facing the viewer,
+  centred horizontally, the whole body inside the canvas with a small margin.
+
+PROPORTIONS - measured from the target game.
+Let H be the character's total height, from the top of the hair or headwear to the soles.
+Given rule 2, H is 19 logical pixels, so each fraction below is close to a count of blocks.
+- TOTAL WIDTH: 0.65 to 0.7 x H, which is 12 to 13 blocks wide. See rule 1.
+- Head, including all hair and headwear: from 0.00 H down to 0.50 H - about 10 blocks.
+  The head is HALF the total height. The character is 2 heads tall.
+- The head is about 0.9 of the total width, nearly as wide as the whole figure.
+  The shoulders are the widest part, as wide as the figure itself.
+- Eyes: two dark blocks on the band from 0.35 H to 0.45 H. One or two blocks each,
+  clearly separated, with at least one block of face between them.
+- Torso and upper-body clothing: 0.50 H to 0.85 H.
+- Legs, trousers and footwear: 0.85 H to 1.00 H. The legs are short and thick.
+  The shirt hangs down as far as 0.85 H, so the band from 0.75 H to 0.85 H is shirt,
+  not trousers.
+- Arms hang straight down at the sides, close to the body.
+  Nothing held, no props, no weapons.
+
+OUTLINE
+- A closed dark outline all the way around the character, with no gaps anywhere.
+- The outline must be EXACTLY ONE logical pixel thick - one block, nowhere two.
+  A thicker outline eats the character once the picture is shrunk.
+- Do not outline anything inside the silhouette. No outlines around the shirt, the belt,
+  the boots or individual strands of hair.
+
+SILHOUETTE
+- The outline of the whole figure must be simple enough to read at a glance.
+- No thin spikes anywhere, and that includes the hair. Spiky hair collapses into a solid
+  dark blob when the picture is shrunk. Draw hair as one rounded mass, never wider than the
+  shoulders - the head with its hair is already about 0.9 of the total width.
+- No gaps, holes or floating pieces. Everything is one connected shape.
+
+DO NOT
+- No gradients, no shading, no highlights, no texture, no glow, no soft edges.
+- No detail smaller than one logical pixel: no buttons, no laces, no stitching, no belt
+  holes, no eyebrows, no eye highlights, no teeth, no individual fingers.
+- No 3/4 view, no side view, no perspective, no tilt. Strictly front-facing and symmetrical.
+- No background of any kind, no frame, no vignette, no drop shadow.
+- Do not crop: the whole body from the top of the head to the soles must fit inside the canvas.
+- No multiple poses, no turnaround sheet, no colour swatches, no labels.
+
+CHECK BEFORE YOU FINISH
+- Is the figure 12 to 13 blocks wide and 19 blocks tall? If it is narrower, widen it.
+- Is every edge a hard step, with no blended pixels anywhere?
+- Is the outline one block thick everywhere?
+- Does the hair read as one rounded mass rather than a set of points?

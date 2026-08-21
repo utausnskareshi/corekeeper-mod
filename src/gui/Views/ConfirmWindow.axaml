@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:CoreKeeperSkinTool.Gui.Localization"
+        x:Class="CoreKeeperSkinTool.Gui.Views.ConfirmWindow"
+        Icon="/Assets/icon.ico"
+        Title="{loc:Tr confirm.title}"
+        Width="620" SizeToContent="Height" MaxHeight="560"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False">
+  <StackPanel Margin="20" Spacing="14">
+    <TextBlock x:Name="MessageText" TextWrapping="Wrap" />
+    <Border x:Name="DetailBorder" Background="#18000000" CornerRadius="4" Padding="10"
+            IsVisible="{Binding #DetailText.IsVisible}">
+      <ScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto">
+        <TextBlock x:Name="DetailText" TextWrapping="Wrap" FontSize="12"
+                   FontFamily="Consolas,Menlo,monospace" />
+      </ScrollViewer>
+    </Border>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <!-- Escape is handled in code-behind rather than by IsCancel on this button. IsCancel made
+           Escape press whatever this button says, and where the two buttons are a choice between
+           two actions rather than a yes and a no, that made Escape silently perform the second
+           one. It now closes with no answer at all. OkButton is deliberately not IsDefault, so
+           Enter cannot fire a deletion by accident. -->
+      <Button x:Name="CancelButton" Padding="16,6" />
+      <Button x:Name="OkButton" Padding="16,6" />
+    </StackPanel>
+  </StackPanel>
+</Window>

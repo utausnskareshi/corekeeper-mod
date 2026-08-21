@@ -1,0 +1,106 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>CoreKeeperSkinTool</RootNamespace>
+    <AssemblyName>CoreKeeperSkinTool.Core</AssemblyName>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- This library is bundled inside both executables, so it carries the same attribution -->
+  <PropertyGroup>
+    <Product>Core Keeper スキン作成ツール</Product>
+    <AssemblyTitle>Core Keeper スキン作成ツール (共通処理)</AssemblyTitle>
+    <Authors>歌うＬＩＮＥ彼氏</Authors>
+    <Company>歌うＬＩＮＥ彼氏</Company>
+    <Copyright>Copyright (c) 2026 歌うＬＩＮＥ彼氏</Copyright>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ModPayloadPath>$(MSBuildThisFileDirectory)..\..\build\mod-payload\CustomPlayerSkin.zip</ModPayloadPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The Zip Slip guard is internal; the tests need to reach it with a crafted archive -->
+    <InternalsVisibleTo Include="CoreKeeperSkinTool.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Embed the layout definition so both the CLI and the GUI work regardless of
+      whether the data/ folder is present next to them.
+    -->
+    <EmbeddedResource Include="..\..\data\player-body-layout.json" LogicalName="player-body-layout.json" />
+
+    <!--
+      Where each part of the game's character sits, so the starter template can line up with it.
+      Rectangles only, measured by scripts/generate-parts-layout.ps1; no game artwork.
+    -->
+    <EmbeddedResource Include="..\..\data\player-parts.json" LogicalName="player-parts.json" />
+
+    <!-- Preset characters: colours and shape choices only, drawn at run time -->
+    <EmbeddedResource Include="..\..\data\presets.json" LogicalName="presets.json" />
+
+    <!-- Which Core Keeper versions this build has been checked against -->
+    <EmbeddedResource Include="..\..\data\supported-versions.json" LogicalName="supported-versions.json" />
+
+    <!--
+      Prompt for an image generator, shown in the help so it can be copied out.
+      Kept as a text file rather than inside the help JSON: it is the same English text in every
+      language, and holding one copy stops the languages drifting apart. It also spares the
+      escaping that a forty-line block would need inside a JSON string.
+    -->
+    <EmbeddedResource Include="..\..\data\ai-prompt.txt" LogicalName="ai-prompt.txt" />
+
+    <!--
+      UI strings (lang.*.json) and help text (help.*.json).
+      Adding a language means dropping in a file with a different code in the name.
+
+      WithCulture="false" is required. MSBuild reads the .ja. / .en. in the middle of the
+      file name as a culture and moves the file into a satellite assembly
+      (obj/ja/*.resources.dll) instead of the main one, and it does so without a warning.
+      LogicalName is set for the same reason, fixing the resource name to the file name.
+    -->
+    <EmbeddedResource Include="Localization\*.json"
+                      LogicalName="%(Filename)%(Extension)"
+                      WithCulture="false" />
+  </ItemGroup>
+
+  <!--
+    Embed the prebuilt mod, produced by scripts/build-mod.ps1. With it, users can install
+    the mod from the GUI without owning Unity. During development the zip may not exist
+    yet; the application then reports that no mod is bundled.
+  -->
+  <ItemGroup Condition="Exists('$(ModPayloadPath)')">
+    <EmbeddedResource Include="$(ModPayloadPath)"
+                      LogicalName="mod-payload.zip"
+                      WithCulture="false" />
+  </ItemGroup>
+
+  <!--
+    Say so at build time when the payload is absent. Without this the condition above simply
+    does nothing and the build succeeds, producing an application whose "install mod" button
+    cannot work - a failure that only shows up in front of a user.
+    Release builds set CksRequireModPayload=true to turn this into an error.
+  -->
+  <Target Name="WarnWhenModPayloadMissing" BeforeTargets="BeforeBuild" Condition="!Exists('$(ModPayloadPath)')">
+    <Error Condition="'$(CksRequireModPayload)' == 'true'"
+           Text="同梱する MOD が無い: $(ModPayloadPath) … 先に scripts/build-mod.ps1 を実行すること。" />
+    <Warning Condition="'$(CksRequireModPayload)' != 'true'"
+             Text="同梱する MOD が無いため、MOD 導入機能が使えないアプリになる: $(ModPayloadPath) … scripts/build-mod.ps1 を実行すること。" />
+  </Target>
+
+  <ItemGroup>
+    <!--
+      Pinned to the version Avalonia.Skia 12.1.1 is built against. Referencing a newer major
+      version instead makes NuGet unify everything upward with no warning, and Avalonia's
+      renderer then runs against a SkiaSharp it was never compiled for.
+      Upgrade this only together with Avalonia.
+    -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.4" />
+  </ItemGroup>
+
+</Project>

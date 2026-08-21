@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- Match Core, which targets net9.0 -->
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Drawn by scripts/generate-icon.ps1; this is what Explorer and the taskbar show -->
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+    <AssemblyName>cks-gui</AssemblyName>
+    <RootNamespace>CoreKeeperSkinTool.Gui</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!--
+    What Explorer shows under Properties. Without these the file said "cks-gui" for its product,
+    its company and its description, and carried no copyright at all - while LICENSE, sitting
+    beside it in the same zip, names a person. The two have to agree.
+
+    Version is deliberately not set here. StartupGate.ApplicationVersion reads the assembly
+    version and records it when the terms are accepted, so changing it would ask everyone to
+    accept them again for no reason.
+  -->
+  <PropertyGroup>
+    <Product>Core Keeper スキン作成ツール</Product>
+    <AssemblyTitle>Core Keeper スキン作成ツール</AssemblyTitle>
+    <Authors>歌うＬＩＮＥ彼氏</Authors>
+    <Company>歌うＬＩＮＥ彼氏</Company>
+    <Copyright>Copyright (c) 2026 歌うＬＩＮＥ彼氏</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Localization and settings are internal; the tests need to reach them directly -->
+    <InternalsVisibleTo Include="CoreKeeperSkinTool.Gui.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.1" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\core\CoreKeeperSkinTool.Core.csproj" />
+  </ItemGroup>
+</Project>

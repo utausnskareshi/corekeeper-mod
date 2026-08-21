@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:CoreKeeperSkinTool.Gui.Localization"
+        x:Class="CoreKeeperSkinTool.Gui.Views.StartupNoticeWindow"
+        Icon="/Assets/icon.ico"
+        x:DataType="loc:LocalizedText"
+        Width="680" SizeToContent="Height" MaxHeight="760"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False">
+  <Window.Resources>
+    <!-- One block of text per language, headed by the language's own name -->
+    <DataTemplate x:Key="LanguageBlock" x:DataType="loc:LocalizedText">
+      <StackPanel Margin="0,0,0,14">
+        <TextBlock Text="{Binding Language}" FontSize="11" Opacity="0.6" Margin="0,0,0,4"
+                   IsVisible="{Binding Language, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+      </StackPanel>
+    </DataTemplate>
+  </Window.Resources>
+
+  <StackPanel Margin="24,20" Spacing="12">
+    <ScrollViewer MaxHeight="330" VerticalScrollBarVisibility="Auto">
+      <ItemsControl x:Name="MessageList" ItemTemplate="{StaticResource LanguageBlock}" />
+    </ScrollViewer>
+
+    <Border x:Name="DetailBorder" Background="#18000000" CornerRadius="4" Padding="12">
+      <ScrollViewer MaxHeight="200" VerticalScrollBarVisibility="Auto">
+        <ItemsControl x:Name="DetailList" ItemTemplate="{StaticResource LanguageBlock}" FontSize="12" />
+      </ScrollViewer>
+    </Border>
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button x:Name="FolderButton" Padding="14,6" />
+      <Button x:Name="DeclineButton" Padding="14,6" />
+      <Button x:Name="AcceptButton" Padding="14,6" IsDefault="True" />
+    </StackPanel>
+  </StackPanel>
+</Window>

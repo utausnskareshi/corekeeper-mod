@@ -1,0 +1,620 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:CoreKeeperSkinTool.Gui.ViewModels"
+        xmlns:ed="using:CoreKeeperSkinTool.Gui.Editing"
+        xmlns:cv="using:CoreKeeperSkinTool.Gui"
+        xmlns:loc="using:CoreKeeperSkinTool.Gui.Localization"
+        xmlns:core="using:CoreKeeperSkinTool.Editing"
+        x:Class="CoreKeeperSkinTool.Gui.Views.MainWindow"
+        Icon="/Assets/icon.ico"
+        x:DataType="vm:MainViewModel"
+        Title="{loc:Tr app.title}"
+        Width="1520" Height="920"
+        MinWidth="1100" MinHeight="700"
+        DragDrop.AllowDrop="True">
+
+  <Window.Styles>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,12,0,4" />
+    </Style>
+    <Style Selector="TextBlock.hint">
+      <Setter Property="Opacity" Value="0.6" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.value">
+      <Setter Property="Opacity" Value="0.8" />
+      <Setter Property="MinWidth" Value="34" />
+      <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+    <Style Selector="RadioButton.tool">
+      <Setter Property="Margin" Value="0,0,10,0" />
+    </Style>
+
+    <!-- A palette swatch is the colour and nothing else, so the button chrome is taken away
+         and a thin border put back to keep a light colour from vanishing into the strip. -->
+    <Style Selector="Button.swatch">
+      <Setter Property="BorderBrush" Value="#60FFFFFF" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="2" />
+    </Style>
+    <Style Selector="Button.swatch:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!--
+      The gear toggle sits on the dark environment bar, where the Fluent switch renders in
+      colours close to the surrounding text and its state cannot be read at a glance. It is
+      therefore drawn as a pill whose fill changes outright between the two states, rather
+      than relying on the theme.
+    -->
+    <Style Selector="ToggleButton.pill">
+      <Setter Property="Background" Value="#3A4A66" />
+      <Setter Property="Foreground" Value="#E8EDF5" />
+      <Setter Property="BorderBrush" Value="#8FA6C8" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="14,5" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="ToggleButton.pill:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#4C5F80" />
+      <Setter Property="TextBlock.Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="ToggleButton.pill:checked /template/ ContentPresenter">
+      <Setter Property="Background" Value="#FFC24A" />
+      <Setter Property="TextBlock.Foreground" Value="#1A1A1A" />
+      <Setter Property="BorderBrush" Value="#FFE29A" />
+    </Style>
+    <Style Selector="ToggleButton.pill:checked:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#FFD170" />
+      <Setter Property="TextBlock.Foreground" Value="#1A1A1A" />
+    </Style>
+
+    <!--
+      The environment bar paints an opaque dark navy of its own, while the rest of the window
+      follows the system theme. On a light theme the inherited foreground is near-black, which
+      on that bar is unreadable, so everything sitting on it states its own colour.
+    -->
+    <Style Selector="TextBlock.onDark">
+      <Setter Property="Foreground" Value="#EAF0FA" />
+    </Style>
+
+    <Style Selector="Button.accent">
+      <Setter Property="Background" Value="#2F6FD0" />
+      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="BorderBrush" Value="#8FB6EE" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.accent /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2F6FD0" />
+      <Setter Property="TextBlock.Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.accent:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#4185E8" />
+      <Setter Property="TextBlock.Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.accent:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="#255BAC" />
+      <Setter Property="TextBlock.Foreground" Value="#FFFFFF" />
+    </Style>
+    <!-- Reads as unavailable without disappearing into the bar behind it -->
+    <Style Selector="Button.accent:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2B3A55" />
+      <Setter Property="TextBlock.Foreground" Value="#8A99B5" />
+      <Setter Property="BorderBrush" Value="#44557A" />
+    </Style>
+
+    <!--
+      A quiet action on the dark bar. The default Fluent button fills itself in a grey close to
+      the bar's own blue, which left it reading as a label rather than a button and made it
+      indistinguishable from the amber one beside it. Outlined instead of filled, so it is
+      clearly a button and just as clearly not the one to press.
+    -->
+    <Style Selector="Button.subtle">
+      <Setter Property="Foreground" Value="#C9D6EE" />
+      <Setter Property="BorderBrush" Value="#5C6E92" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Button.subtle /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="TextBlock.Foreground" Value="#C9D6EE" />
+    </Style>
+    <Style Selector="Button.subtle:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#2A3C5C" />
+      <Setter Property="TextBlock.Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.subtle:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="#1F2E48" />
+      <Setter Property="TextBlock.Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.subtle:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="TextBlock.Foreground" Value="#6B7A96" />
+      <Setter Property="BorderBrush" Value="#3B4A66" />
+    </Style>
+
+    <!--
+      Amber, and only shown when there is something to do about it. The same amber the truncated
+      source warning uses, so "this needs your attention" looks the same wherever it appears, and
+      nothing like the blue of the button that installs or removes.
+    -->
+    <Style Selector="Button.notice">
+      <Setter Property="Foreground" Value="#2A1D00" />
+      <Setter Property="BorderBrush" Value="#FFD79B" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.notice /template/ ContentPresenter">
+      <Setter Property="Background" Value="#FFB454" />
+      <Setter Property="TextBlock.Foreground" Value="#2A1D00" />
+    </Style>
+    <Style Selector="Button.notice:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#FFC677" />
+      <Setter Property="TextBlock.Foreground" Value="#2A1D00" />
+    </Style>
+    <Style Selector="Button.notice:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="#E29A3C" />
+      <Setter Property="TextBlock.Foreground" Value="#2A1D00" />
+    </Style>
+    <Style Selector="Button.notice:disabled /template/ ContentPresenter">
+      <Setter Property="Background" Value="#5A4A2A" />
+      <Setter Property="TextBlock.Foreground" Value="#A2937A" />
+      <Setter Property="BorderBrush" Value="#6E5C38" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+    <!-- Input and language selection -->
+    <Border Grid.Row="0" Padding="10" Background="#22000000">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
+        <Button Grid.Column="0" x:Name="OpenButton" Padding="14,6"
+                Content="{loc:Tr top.open}" />
+
+        <!--
+          Preset picker. Grouped and shown with thumbnails: thirty entries told apart by a word
+          alone are hard to choose between, and what is being chosen is a picture.
+        -->
+        <TextBlock Grid.Column="1" VerticalAlignment="Center" Margin="16,0,6,0"
+                   Text="{loc:Tr preset.label}" />
+        <ComboBox Grid.Column="2" x:Name="PresetBox" Width="190" MaxDropDownHeight="420"
+                  ItemsSource="{Binding Presets}"
+                  SelectedItem="{Binding SelectedPreset}">
+          <!--
+            Avalonia has no grouped items view, so the group is shown on the row itself and the
+            list is ordered by group. That keeps related characters together and still says
+            which family each one belongs to.
+          -->
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Image Grid.Column="0" Source="{Binding Thumbnail}" Width="26" Height="26"
+                       Margin="0,0,8,0" RenderOptions.BitmapInterpolationMode="None" />
+                <TextBlock Grid.Column="1" Text="{Binding Display}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="{Binding GroupDisplay}" VerticalAlignment="Center"
+                           Opacity="0.5" FontSize="11" Margin="10,0,0,0" />
+              </Grid>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <Button Grid.Column="3" x:Name="RandomButton" Padding="12,6" Margin="6,0,0,0"
+                Content="{loc:Tr preset.random}"
+                ToolTip.Tip="{loc:Tr preset.randomTip}" />
+        <Button Grid.Column="4" x:Name="RecolorButton" Padding="12,6" Margin="6,0,0,0"
+                Content="{loc:Tr preset.recolor}"
+                ToolTip.Tip="{loc:Tr preset.recolorTip}" />
+
+        <TextBlock Grid.Column="5" VerticalAlignment="Center" Margin="12,0"
+                   TextTrimming="CharacterEllipsis" Text="{Binding SourceDisplay}" />
+        <Button Grid.Column="6" x:Name="RegenerateButton" Padding="12,6" Margin="0,0,8,0"
+                IsVisible="{Binding NeedsRegenerate}"
+                Content="{loc:Tr top.regenerate}" />
+        <ProgressBar Grid.Column="7" IsIndeterminate="True" Width="80" Height="4"
+                     IsVisible="{Binding IsBusy}" VerticalAlignment="Center" Margin="0,0,12,0" />
+        <TextBlock Grid.Column="8" VerticalAlignment="Center" Margin="0,0,6,0"
+                   Text="{loc:Tr app.language}" />
+        <ComboBox Grid.Column="9" Width="130"
+                  ItemsSource="{Binding Localization.Languages}"
+                  SelectedItem="{Binding Localization.Current}" />
+        <Button Grid.Column="10" x:Name="HelpButton" Padding="14,6" Margin="8,0,0,0"
+                Content="{loc:Tr help.button}"
+                ToolTip.Tip="{loc:Tr help.buttonTip}" />
+      </Grid>
+    </Border>
+
+    <!-- Environment status: keeps game detection and mod install state permanently visible -->
+    <Border Grid.Row="1" Padding="10,6" Background="#1A2A4A" x:Name="EnvironmentBar">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+        <TextBlock Grid.Column="0" Classes="onDark" VerticalAlignment="Center" TextWrapping="Wrap"
+                   Text="{Binding EnvironmentStatus}" />
+        <Button Grid.Column="1" x:Name="GamePathButton" Classes="subtle" Padding="10,5" Margin="0,0,12,0"
+                VerticalAlignment="Center"
+                Content="{loc:Tr action.gamePath}"
+                ToolTip.Tip="{loc:Tr action.gamePathTip}" />
+        <ToggleButton Grid.Column="2" Classes="pill" Margin="0,0,12,0" VerticalAlignment="Center"
+                      IsChecked="{Binding ShowGameGear}"
+                      Content="{Binding GearButtonLabel}"
+                      ToolTip.Tip="{loc:Tr gear.tip}" />
+        <!-- Shown only when the two copies differ. Kept apart from the install and remove toggle
+             beside it: as a third state of that button, removing the mod would become unreachable
+             whenever the comparison could not be made. -->
+        <Button Grid.Column="3" x:Name="UpdateModButton" Classes="notice" Padding="12,5" Margin="0,0,12,0"
+                VerticalAlignment="Center"
+                IsVisible="{Binding IsModOutdated}"
+                IsEnabled="{Binding CanInstallMod}"
+                Content="{loc:Tr action.updateMod}"
+                ToolTip.Tip="{loc:Tr action.updateModTip}" />
+        <Button Grid.Column="4" x:Name="InstallModButton" Classes="accent" Padding="14,5"
+                IsEnabled="{Binding CanInstallMod}"
+                Content="{Binding ModButtonLabel}"
+                ToolTip.Tip="{Binding ModButtonTip}" />
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2" ColumnDefinitions="300,*,330">
+
+      <!-- Import settings -->
+      <ScrollViewer Grid.Column="0" Padding="10" VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+          <TextBlock Classes="section" Margin="0,0,0,2"
+                     Text="{loc:Tr import.title}" />
+          <TextBlock Classes="hint" Text="{loc:Tr import.hint}" />
+
+          <!-- Nothing here applies to a finished sheet: there is no source picture to apply it
+               to. Left enabled, every control in this panel did nothing and said nothing. -->
+          <TextBlock Classes="hint" Margin="0,6,0,0" Foreground="#FFB454"
+                     IsVisible="{Binding !HasSourceImage}"
+                     Text="{loc:Tr import.sheetOpened}" />
+
+          <StackPanel IsEnabled="{Binding HasSourceImage}">
+
+          <TextBlock Classes="section" Text="{loc:Tr section.background}" />
+          <CheckBox IsChecked="{Binding RemoveBackground}"
+                    Content="{loc:Tr background.remove}" />
+          <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+            <Slider Grid.Column="0" Minimum="0" Maximum="120" Value="{Binding BackgroundTolerance}"
+                    IsEnabled="{Binding RemoveBackground}" />
+            <TextBlock Grid.Column="1" Classes="value" VerticalAlignment="Center"
+                       Text="{Binding BackgroundTolerance}" />
+          </Grid>
+          <TextBlock Classes="hint" Text="{loc:Tr background.hint}" />
+
+          <TextBlock Classes="section" Text="{loc:Tr section.size}" />
+          <CheckBox IsChecked="{Binding Trim}"
+                    Content="{loc:Tr size.trim}" />
+          <!-- One field per row. Two pairs across a 300-pixel panel fitted while the labels were
+               the Japanese 幅 and 高さ; in English "Width" and "Height" took the width from the
+               boxes beside them and squeezed those down to a slit, so the values they held could
+               not be read at all. A row each holds in any language. -->
+          <Grid ColumnDefinitions="Auto,*" Margin="0,8,0,0">
+            <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0"
+                       Text="{loc:Tr size.width}" />
+            <NumericUpDown Grid.Column="1" Minimum="3" Maximum="26" Increment="1"
+                           Value="{Binding BoxWidth}" FormatString="0" />
+          </Grid>
+          <Grid ColumnDefinitions="Auto,*" Margin="0,4,0,0">
+            <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0"
+                       Text="{loc:Tr size.height}" />
+            <NumericUpDown Grid.Column="1" Minimum="3" Maximum="26" Increment="1"
+                           Value="{Binding BoxHeight}" FormatString="0" />
+          </Grid>
+          <Grid ColumnDefinitions="Auto,*" Margin="0,6,0,0">
+            <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0"
+                       Text="{loc:Tr size.offsetX}" />
+            <NumericUpDown Grid.Column="1" Minimum="-12" Maximum="12" Increment="1"
+                           Value="{Binding OffsetX}" FormatString="0" />
+          </Grid>
+          <Grid ColumnDefinitions="Auto,*" Margin="0,4,0,0">
+            <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0"
+                       Text="{loc:Tr size.offsetY}" />
+            <NumericUpDown Grid.Column="1" Minimum="-12" Maximum="12" Increment="1"
+                           Value="{Binding OffsetY}" FormatString="0" />
+          </Grid>
+          <TextBlock Classes="hint" Text="{loc:Tr size.hint}" />
+
+          <TextBlock Classes="section" Text="{loc:Tr section.pixelart}" />
+          <Grid ColumnDefinitions="*,Auto">
+            <Slider Grid.Column="0" Minimum="1" Maximum="255" Value="{Binding AlphaThreshold}" />
+            <TextBlock Grid.Column="1" Classes="value" VerticalAlignment="Center" Text="{Binding AlphaThreshold}" />
+          </Grid>
+          <TextBlock Classes="hint" Text="{loc:Tr pixelart.alphaHint}" />
+
+          <CheckBox IsChecked="{Binding UseQuantize}" Margin="0,8,0,0"
+                    Content="{loc:Tr pixelart.quantize}" />
+          <Grid ColumnDefinitions="*,Auto">
+            <Slider Grid.Column="0" Minimum="2" Maximum="64" Value="{Binding Colors}"
+                    IsEnabled="{Binding UseQuantize}" />
+            <TextBlock Grid.Column="1" Classes="value" VerticalAlignment="Center" Text="{Binding Colors}" />
+          </Grid>
+
+          <CheckBox IsChecked="{Binding UseNearest}" Margin="0,8,0,0"
+                    Content="{loc:Tr pixelart.nearest}" />
+          <TextBlock Classes="hint" Text="{loc:Tr pixelart.nearestHint}" />
+
+          <TextBlock Classes="section" Text="{loc:Tr section.outline}" />
+          <CheckBox IsChecked="{Binding UseOutline}"
+                    Content="{loc:Tr outline.enable}" />
+          <TextBox Text="{Binding OutlineColor}" PlaceholderText="#101018" Margin="0,4,0,0"
+                   IsEnabled="{Binding UseOutline}" />
+          <TextBlock Classes="hint" Text="{loc:Tr outline.hint}" />
+
+          <TextBlock Classes="section" Text="{loc:Tr section.motion}" />
+          <CheckBox IsChecked="{Binding UseMotion}"
+                    Content="{loc:Tr motion.enable}" />
+          <CheckBox IsChecked="{Binding MotionShiftOnly}" IsEnabled="{Binding UseMotion}"
+                    Margin="16,2,0,0" Content="{loc:Tr motion.shiftOnly}" />
+          <TextBlock Classes="hint" Text="{loc:Tr motion.hint}" />
+
+          <CheckBox IsChecked="{Binding MirrorSideFrames}" Margin="0,6,0,0"
+                    Content="{loc:Tr motion.mirrorSide}" />
+          <TextBlock Classes="hint" Text="{loc:Tr motion.mirrorSideHint}" />
+
+          <CheckBox IsChecked="{Binding HideFaceOnBackFrames}" Margin="0,6,0,0"
+                    Content="{loc:Tr motion.hideBackFace}" />
+          <TextBlock Classes="hint" Text="{loc:Tr motion.hideBackFaceHint}" />
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- Pixel editing -->
+      <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*,Auto">
+
+        <Border Grid.Row="0" Padding="10,8" Background="#18000000">
+          <StackPanel Orientation="Horizontal">
+            <RadioButton Classes="tool" GroupName="Tool"
+                         Content="{loc:Tr tool.pen}"
+                         IsChecked="{Binding Tool, Converter={x:Static cv:EnumMatchConverter.Instance}, ConverterParameter={x:Static core:EditorTool.Pen}}" />
+            <RadioButton Classes="tool" GroupName="Tool"
+                         Content="{loc:Tr tool.eraser}"
+                         IsChecked="{Binding Tool, Converter={x:Static cv:EnumMatchConverter.Instance}, ConverterParameter={x:Static core:EditorTool.Eraser}}" />
+            <RadioButton Classes="tool" GroupName="Tool"
+                         Content="{loc:Tr tool.picker}"
+                         IsChecked="{Binding Tool, Converter={x:Static cv:EnumMatchConverter.Instance}, ConverterParameter={x:Static core:EditorTool.Picker}}" />
+            <RadioButton Classes="tool" GroupName="Tool"
+                         Content="{loc:Tr tool.bucket}"
+                         IsChecked="{Binding Tool, Converter={x:Static cv:EnumMatchConverter.Instance}, ConverterParameter={x:Static core:EditorTool.Bucket}}" />
+            <RadioButton Classes="tool" GroupName="Tool"
+                         Content="{loc:Tr tool.line}"
+                         IsChecked="{Binding Tool, Converter={x:Static cv:EnumMatchConverter.Instance}, ConverterParameter={x:Static core:EditorTool.Line}}" />
+            <RadioButton Classes="tool" GroupName="Tool"
+                         Content="{loc:Tr tool.rectangle}"
+                         IsChecked="{Binding Tool, Converter={x:Static cv:EnumMatchConverter.Instance}, ConverterParameter={x:Static core:EditorTool.Rectangle}}" />
+            <RadioButton Classes="tool" GroupName="Tool"
+                         Content="{loc:Tr tool.filledRectangle}"
+                         IsChecked="{Binding Tool, Converter={x:Static cv:EnumMatchConverter.Instance}, ConverterParameter={x:Static core:EditorTool.FilledRectangle}}" />
+            <RadioButton Classes="tool" GroupName="Tool"
+                         Content="{loc:Tr tool.colourReplace}"
+                         ToolTip.Tip="{loc:Tr tool.colourReplaceTip}"
+                         IsChecked="{Binding Tool, Converter={x:Static cv:EnumMatchConverter.Instance}, ConverterParameter={x:Static core:EditorTool.ColourReplace}}" />
+
+            <!-- Mid grey rather than white: the strip behind it follows the theme, and a white
+             separator vanishes on a light one -->
+        <Border Width="1" Background="#50808080" Margin="6,2" />
+
+            <TextBlock VerticalAlignment="Center" Margin="4,0,6,0"
+                       Text="{loc:Tr editor.color}" />
+            <TextBox Text="{Binding PenColor}" Width="96" />
+            <Border Width="26" Height="26" Margin="6,0" BorderBrush="#60FFFFFF" BorderThickness="1"
+                    Background="{Binding PenColor, Converter={x:Static cv:ColorStringToBrushConverter.Instance}}" />
+
+            <!-- The colours already in the sheet. Typing hex was the only way to reach a shade
+                 the picture already uses, so matching one meant picking it up and not losing it. -->
+            <ItemsControl ItemsSource="{Binding Palette}" MaxWidth="330" Margin="6,0,0,0"
+                          ToolTip.Tip="{loc:Tr editor.paletteTip}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                  <Button Classes="swatch" Width="18" Height="18" Margin="1" Padding="0"
+                          Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).UsePaletteColourCommand}"
+                          CommandParameter="{Binding}"
+                          ToolTip.Tip="{Binding}"
+                          Background="{Binding Converter={x:Static cv:ColorStringToBrushConverter.Instance}}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Mid grey rather than white: the strip behind it follows the theme, and a white
+             separator vanishes on a light one -->
+        <Border Width="1" Background="#50808080" Margin="6,2" />
+
+            <Button x:Name="UndoButton" IsEnabled="{Binding CanUndo}" Margin="0,0,6,0"
+                    Content="{loc:Tr editor.undo}" />
+            <Button x:Name="RedoButton" IsEnabled="{Binding CanRedo}"
+                    Content="{loc:Tr editor.redo}" />
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1" Padding="10,6" Background="#10000000">
+          <StackPanel Orientation="Horizontal">
+            <CheckBox IsChecked="{Binding EditAllFrames}" Margin="0,0,12,0"
+                      Content="{loc:Tr editor.allFrames}"
+                      ToolTip.Tip="{loc:Tr editor.allFramesTip}" />
+            <CheckBox IsChecked="{Binding MirrorDrawing}" Margin="0,0,12,0"
+                      Content="{loc:Tr editor.mirrorDrawing}"
+                      ToolTip.Tip="{loc:Tr editor.mirrorDrawingTip}" />
+            <TextBlock VerticalAlignment="Center" Margin="0,0,6,0"
+                       Text="{loc:Tr editor.view}" />
+            <ComboBox ItemsSource="{Binding Frames}" SelectedItem="{Binding SelectedFrameChoice}" Width="210">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:FrameChoice">
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock VerticalAlignment="Center" Margin="12,0,6,0"
+                       Text="{loc:Tr editor.zoom}" />
+            <Slider Minimum="2" Maximum="24" Value="{Binding Zoom}" Width="120" />
+            <TextBlock Classes="value" VerticalAlignment="Center" Text="{Binding Zoom}" />
+            <CheckBox IsChecked="{Binding ShowGrid}" Margin="12,0,8,0"
+                      Content="{loc:Tr editor.grid}" />
+            <CheckBox IsChecked="{Binding ShowGuides}" Margin="0,0,8,0"
+                      Content="{loc:Tr editor.guides}" />
+            <CheckBox IsChecked="{Binding UseLightBackground}"
+                      Content="{loc:Tr editor.lightBackground}" />
+          </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                      Padding="10" Background="#0C000000">
+          <ed:PixelCanvas x:Name="Canvas"
+                          HorizontalAlignment="Left" VerticalAlignment="Top"
+                          Source="{Binding SheetImage}"
+                          Zoom="{Binding Zoom}"
+                          ShowGrid="{Binding ShowGrid}"
+                          ShowGuides="{Binding ShowGuides}"
+                          Layout="{Binding Layout}"
+                          UseLightBackground="{Binding UseLightBackground}"
+                          Frame="{Binding SelectedFrame}"
+                          PreviewPixels="{Binding PreviewPixels}" />
+        </ScrollViewer>
+
+        <Border Grid.Row="3" Padding="10,6" Background="#18000000">
+          <TextBlock Text="{Binding CursorInfo}" FontFamily="Consolas,Menlo,monospace" FontSize="12" />
+        </Border>
+      </Grid>
+
+      <!-- Preview -->
+      <Border Grid.Column="2" Padding="10" Background="#14000000">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+          <TextBlock Classes="section" Margin="0,0,0,6"
+                     Text="{loc:Tr preview.title}" />
+
+          <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+            <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0"
+                       Text="{loc:Tr preview.animation}" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Animations}"
+                      SelectedItem="{Binding SelectedAnimation}" HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:AnimationChoice">
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
+          <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,8">
+            <TextBlock Grid.Column="0" VerticalAlignment="Center" Margin="0,0,8,0"
+                       Text="{loc:Tr preview.direction}" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Directions}"
+                      SelectedItem="{Binding SelectedDirection}" HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:DirectionChoice">
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </Grid>
+
+          <Border Background="#1E1E26" BorderBrush="#40FFFFFF" BorderThickness="1"
+                  Height="260" Margin="0,0,0,8">
+            <Image Source="{Binding AnimationImage}" Stretch="Uniform" Margin="16"
+                   RenderOptions.BitmapInterpolationMode="None" />
+          </Border>
+
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <ToggleButton Grid.Column="0" IsChecked="{Binding IsPlaying}" Padding="14,4"
+                          Content="{Binding PlayButtonLabel}" />
+            <Slider Grid.Column="1" Minimum="1" Maximum="24" Value="{Binding FramesPerSecond}" Margin="10,0" />
+            <TextBlock Grid.Column="2" Classes="value" VerticalAlignment="Center"
+                       Text="{Binding FramesPerSecond}" />
+          </Grid>
+          <TextBlock Classes="hint" Text="{loc:Tr preview.fpsHint}" />
+
+          <!-- Shown only when every frame of the selected action holds the same picture -->
+          <Border Background="#33FFB000" CornerRadius="4" Padding="8,6" Margin="0,6,0,0"
+                  IsVisible="{Binding HasStaticPreviewNote}">
+            <TextBlock Text="{Binding StaticPreviewNote}" TextWrapping="Wrap" />
+          </Border>
+
+          <TextBlock Classes="section" Text="{loc:Tr preview.noteTitle}" />
+          <TextBlock Classes="hint" Text="{loc:Tr preview.note}" />
+
+          <!-- Which characters the two buttons at the bottom act on -->
+          <TextBlock Classes="section" Text="{loc:Tr character.title}" />
+          <TextBlock Classes="hint" Text="{loc:Tr character.hint}" />
+
+          <!-- Nothing can be applied until the game has a character to apply to -->
+          <Border Background="#33FFB000" CornerRadius="4" Padding="8,6" Margin="0,6,0,0"
+                  IsVisible="{Binding !HasCharacters}">
+            <TextBlock Text="{Binding NoCharactersMessage}" TextWrapping="Wrap" />
+          </Border>
+
+          <StackPanel IsVisible="{Binding HasCharacters}">
+            <ItemsControl ItemsSource="{Binding Characters}" Margin="0,4,0,0">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:CharacterChoice">
+                  <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,1">
+                    <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}"
+                              Content="{Binding Display}"
+                              ToolTip.Tip="{Binding Tooltip}" />
+                    <TextBlock Grid.Column="1" Classes="value" VerticalAlignment="Center"
+                               Text="{Binding StateLabel}" />
+                    <!-- Deliberately plain and at the far edge of the row. The tick beside it arms
+                         the two buttons that write to and delete from the game, and this one only
+                         reads; it must not look like it belongs with them. -->
+                    <Button Grid.Column="2" Padding="8,1" Margin="8,0,0,0"
+                            VerticalAlignment="Center"
+                            Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).FetchFromGameCommand}"
+                            CommandParameter="{Binding}"
+                            Content="{loc:Tr character.fetch}"
+                            ToolTip.Tip="{loc:Tr character.fetchTip}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+              <Button x:Name="SelectAllCharactersButton" Padding="10,3" Margin="0,0,6,0"
+                      Content="{loc:Tr character.selectAll}" />
+              <Button x:Name="SelectNoCharactersButton" Padding="10,3"
+                      Content="{loc:Tr character.selectNone}" />
+            </StackPanel>
+
+            <CheckBox Margin="0,8,0,0" IsChecked="{Binding IncludeEquipment}"
+                      Content="{loc:Tr character.includeEquipment}"
+                      ToolTip.Tip="{loc:Tr character.includeEquipmentTip}" />
+          </StackPanel>
+        </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <!-- Actions -->
+    <Border Grid.Row="3" Padding="10" Background="#22000000">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+          <!-- Said until the picture is replaced, not once. A warning in the status line is
+               overwritten by the next thing that happens, and this one has to outlive that:
+               the missing part of the file is transparent and looks deliberate. -->
+          <TextBlock TextWrapping="Wrap" Foreground="#FFB454" FontWeight="SemiBold"
+                     IsVisible="{Binding SourceWasTruncated}"
+                     Text="{loc:Tr status.truncatedBanner}" />
+          <TextBlock TextWrapping="Wrap" Text="{Binding Status}" />
+        </StackPanel>
+        <Button Grid.Column="1" x:Name="SaveButton" Padding="14,6" Margin="8,0"
+                IsEnabled="{Binding HasDocument}"
+                Content="{loc:Tr action.save}" />
+        <Button Grid.Column="2" x:Name="InstallButton" Padding="14,6" Margin="0,0,8,0"
+                IsEnabled="{Binding CanInstallToGame}"
+                Content="{loc:Tr action.install}"
+                ToolTip.Tip="{loc:Tr action.installTip}" />
+        <Button Grid.Column="3" x:Name="UninstallButton" Padding="14,6"
+                IsEnabled="{Binding HasSelectedCharacters}"
+                Content="{loc:Tr action.uninstall}"
+                ToolTip.Tip="{loc:Tr action.uninstallTip}" />
+      </Grid>
+    </Border>
+
+  </Grid>
+</Window>

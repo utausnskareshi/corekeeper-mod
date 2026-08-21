@@ -1,0 +1,21 @@
+{
+  "_comment": [
+    "Core Keeper versions this tool has been checked against.",
+    "",
+    "The mod reaches into the game's own types: PlayerController's sprite sheet layers,",
+    "SpriteSheetSkin.SetSkin, SaveManager.GetCharacterGuid and the 234x156 / 39-frame sheet",
+    "layout. A game update is free to move any of those, so the tool refuses to run against a",
+    "version nobody has checked rather than writing files that might do nothing, or worse.",
+    "",
+    "Entries are matched on the leading major.minor.patch, which is the same granularity the",
+    "game itself uses (Manager.versionRegex is ^(\\d+)\\.(\\d+)\\.(\\d+)). The build suffix that",
+    "follows, such as .5-8be0, changes far more often than anything the mod depends on.",
+    "",
+    "Widening this list is the whole job of supporting a new game version: verify the layout",
+    "with scripts/generate-layout.ps1 and the part boxes with scripts/generate-parts-layout.ps1,",
+    "then add the version here."
+  ],
+  "supported": [
+    "1.2.1"
+  ]
+}

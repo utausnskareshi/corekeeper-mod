@@ -1,0 +1,37 @@
+# --- 公式SDK（Pugstorm/CoreKeeperModSDK の別リポジトリ。ここでは作業用にクローンするだけ） ---
+/CoreKeeperModSDK/
+
+# --- 外部ツール（各自ダウンロード。ライセンス上も再配布しない） ---
+/tools/
+
+# --- 開発環境の導入記録（scripts/setup-dev.ps1 が作り、cleanup-dev.ps1 が読む） ---
+/.cks-dev-setup.json
+
+# --- AssetRipper で抽出したゲームアセット（著作物。絶対にコミットしない） ---
+/extracted/
+
+# --- ビルド成果物 ---
+**/bin/
+**/obj/
+/build/
+/dist/
+*.assetbundle
+
+# --- Unity（MODフォルダをSDKへジャンクションする都合で生成され得るもの） ---
+# Unity が生成する .csproj / .sln は SDK 本体（/CoreKeeperModSDK/）配下にしか作られず、
+# そこは上で丸ごと除外済み。ここで *.csproj を書くと src/ 配下の実プロジェクト
+# ファイル5つまで除外され、クローンしてもビルドできなくなるため書かないこと。
+Library/
+Temp/
+Logs/
+UserSettings/
+*.user
+
+# --- OS / エディタ ---
+.vs/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- コードレビューの作業状態（公開不要） ---
+/.review/

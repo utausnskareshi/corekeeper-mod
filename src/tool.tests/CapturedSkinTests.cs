@@ -110,17 +110,18 @@ public sealed class CapturedSkinTests : IDisposable
     }
 
     [Fact]
-    public void 最後の帯が一番上に来る()
+    public void すべて不透明なら兜が一番上に見える()
     {
         WriteManifest();
         string path = WriteCapture(Layout, DistinctBands());
 
         using SKBitmap composed = CapturedSkins.Compose(path, Layout, includeEquipment: true);
 
-        // Every band is opaque, so the last one drawn is the only one that can be seen
+        // Every band is opaque, so the layer the game draws last - the helmet, band 6, not the
+        // last band in the file - is the only one that can be seen
         Assert.Equal(Layout.Texture!.Width, composed.Width);
         Assert.Equal(Layout.Texture.Height, composed.Height);
-        Assert.Equal(new SKColor(90, 0, 0), composed.GetPixel(0, 0));
+        Assert.Equal(new SKColor(70, 0, 0), composed.GetPixel(0, 0));
     }
 
     [Fact]
@@ -131,8 +132,8 @@ public sealed class CapturedSkinTests : IDisposable
 
         using SKBitmap composed = CapturedSkins.Compose(path, Layout, includeEquipment: false);
 
-        // pants is the last band that is not equipment
-        Assert.Equal(new SKColor(60, 0, 0), composed.GetPixel(0, 0));
+        // The shirt is drawn last of the layers that are not equipment (over the trousers)
+        Assert.Equal(new SKColor(50, 0, 0), composed.GetPixel(0, 0));
     }
 
     [Fact]
@@ -150,8 +151,68 @@ public sealed class CapturedSkinTests : IDisposable
         using SKBitmap withEquipment = CapturedSkins.Compose(path, Layout, includeEquipment: true);
         using SKBitmap without = CapturedSkins.Compose(path, Layout, includeEquipment: false);
 
-        Assert.Equal(new SKColor(7, 8, 9), withEquipment.GetPixel(0, 0));
+        // The helmet is drawn over both kinds of armour
+        Assert.Equal(new SKColor(1, 2, 3), withEquipment.GetPixel(0, 0));
         Assert.Equal(0, without.GetPixel(0, 0).Alpha);
+    }
+
+    /// <summary>
+    /// Paints only the named bands, each opaque in its own colour, and composites them.
+    /// </summary>
+    private SKColor TopOf(bool includeEquipment, params (string Layer, SKColor Colour)[] painted)
+    {
+        WriteManifest();
+
+        SKColor?[] bands = new SKColor?[CapturedSkins.Layers.Length];
+        foreach ((string layer, SKColor colour) in painted)
+        {
+            bands[Array.IndexOf(CapturedSkins.Layers, layer)] = colour;
+        }
+
+        string path = WriteCapture(Layout, bands);
+        using SKBitmap composed = CapturedSkins.Compose(path, Layout, includeEquipment);
+        return composed.GetPixel(0, 0);
+    }
+
+    /// <summary>
+    /// The bands are stacked in the order the game draws them, not in the order they sit in the
+    /// file. Every layer of the 1.3.0.2 Player prefab shares one sorting layer, and its sorting
+    /// orders are body 0, hairShade 1, eyes 2, hair 3, pants 4, shirt 5, pantsArmor 6, breastArmor 7,
+    /// helm 10 (the z positions agree). Stacking in file order put the trousers over the shirt, the
+    /// hair shading and eyes over the hair, leg armour over chest armour, and the helmet under both.
+    /// </summary>
+    [Fact]
+    public void シャツはズボンの上に描く()
+    {
+        SKColor shirt = new(50, 0, 0), pants = new(60, 0, 0);
+
+        Assert.Equal(shirt, TopOf(false, ("pants", pants), ("shirt", shirt)));
+    }
+
+    [Fact]
+    public void 髪は髪の影と目の上に描く()
+    {
+        SKColor hair = new(20, 0, 0), shade = new(30, 0, 0), eyes = new(40, 0, 0);
+
+        Assert.Equal(hair, TopOf(false, ("hair", hair), ("hairShade", shade), ("eyes", eyes)));
+        Assert.Equal(eyes, TopOf(false, ("hairShade", shade), ("eyes", eyes)));
+    }
+
+    [Fact]
+    public void 兜は胴防具と脚防具の上に描き胴防具は脚防具の上に描く()
+    {
+        SKColor helm = new(1, 2, 3), chest = new(4, 5, 6), legs = new(7, 8, 9);
+
+        Assert.Equal(helm, TopOf(true, ("helm", helm), ("breastArmor", chest), ("pantsArmor", legs)));
+        Assert.Equal(chest, TopOf(true, ("breastArmor", chest), ("pantsArmor", legs)));
+    }
+
+    [Fact]
+    public void 描く順は帯と同じ層を1回ずつ並べたもの()
+    {
+        // A name missing from either list would drop a band or index past the file
+        Assert.Equal(CapturedSkins.Layers.Order(), CapturedSkins.DrawOrder.Order());
+        Assert.Equal("body", CapturedSkins.DrawOrder[0]);
     }
 
     [Fact]
@@ -520,6 +581,199 @@ public sealed class CapturedSkinTests : IDisposable
             $"RootDirectory + \"{CapturedSkins.FolderName}/\"",
             source,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void 配置先の名前と設定の区分がMOD側と一致する()
+    {
+        // The other direction of the same contract, and the one everything else rests on: the tool
+        // files each picture under these names and the mod looks for it under its own spelling of
+        // them. Nothing else compared the two, so renaming either side alone passed every test and
+        // shipped a tool that reports "applied" for pictures the mod never reads - or, for the
+        // section, settings toggles that the mod never sees.
+        string mod = ReadModSource("CustomPlayerSkinMod.cs");
+
+        Assert.Contains(
+            $"ModName = \"{SheetInstaller.DefaultModFolderName}\"",
+            mod,
+            StringComparison.Ordinal);
+
+        // The root the mod reads under is spelled from the name, not written out a second time
+        Assert.Contains("RootDirectory = ModName + \"/\"", mod, StringComparison.Ordinal);
+
+        Assert.Contains(
+            $"SkinsDirectory = RootDirectory + \"{CharacterSkins.FolderName}/\"",
+            mod,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            $"SkinsDirectory + guid + \"{CharacterSkins.Extension}\"",
+            mod,
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            $"Section = \"{ModConfigWriter.Section}\"",
+            ReadModSource("ConfigValues.cs"),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MOD側がリフレクションを参照していない()
+    {
+        // The game compiles the mod's source at startup and then puts the result through
+        // Trivial.CodeSecurity, which disallows System.Reflection. Naming it rejects the whole
+        // assembly, so the mod does not load at all: the player gets a box saying the mod failed
+        // to compile, with the real reason only in Player.log. Nothing catches it earlier - the
+        // source compiles cleanly against the game's own assemblies, so building the mod, and
+        // compiling it against the installed game, both stay silent.
+        //
+        // Measured on 1.3.0.1-90f1: a MethodBase parameter and a MemberInfo.Name call were each
+        // rejected by name. Whether a local of such a type alone would be is not known, so the
+        // type names are refused here rather than tried in the game.
+        //
+        // This looks for names, so reflection reached through var and an inferred type would
+        // slip past. What Harmony needs in order to be handed a method - a TargetMethods
+        // returning IEnumerable<MethodBase>, a MethodBase parameter - all name a type, and that
+        // is what makes the check worth having.
+        string[] forbidden =
+        [
+            "System.Reflection",
+            "MethodBase",
+            "MethodInfo",
+            "MemberInfo",
+            "FieldInfo",
+            "PropertyInfo",
+            "BindingFlags",
+        ];
+
+        List<string> offences = [];
+
+        foreach (string file in Directory.EnumerateFiles(
+            Path.Combine(FindRepositoryRoot(), "src", "mod"),
+            "*.cs",
+            SearchOption.AllDirectories))
+        {
+            int number = 0;
+
+            foreach (string line in File.ReadLines(file))
+            {
+                number++;
+                string trimmed = line.TrimStart();
+
+                // A whole line of comment is prose, and the reason for this rule is worth
+                // writing down beside the code that obeys it. A comment trailing a line of code
+                // is not excused: moving it onto its own line is the cheaper fix.
+                if (trimmed.StartsWith("//", StringComparison.Ordinal)
+                    || trimmed.StartsWith("*", StringComparison.Ordinal)
+                    || trimmed.StartsWith("/*", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                offences.AddRange(
+                    forbidden
+                        .Where(name => line.Contains(name, StringComparison.Ordinal))
+                        .Select(name => $"{Path.GetFileName(file)}:{number} {name}"));
+            }
+        }
+
+        Assert.True(
+            offences.Count == 0,
+            "MOD のソースがリフレクションを参照している。ゲームのコード検証に弾かれ、MOD ごと"
+                + $"読み込まれなくなる:{Environment.NewLine}  "
+                + string.Join($"{Environment.NewLine}  ", offences));
+    }
+
+    [Fact]
+    public void MOD側がゲームのコード検査で拒否される名前を参照していない()
+    {
+        // The reflection check above covers one line of the game's rules. The rules themselves,
+        // read from the RoslynCSharpSettings in 1.3.0.2-182b's resources.assets, deny the
+        // namespaces System.IO, System.Diagnostics, System.Net, System.Runtime.InteropServices,
+        // System.Reflection, RoslynCSharp and Pug.Platform, the type System.AppDomain, and fifteen
+        // HarmonyLib types including AccessTools, Traverse and Harmony itself. Each of them rejects
+        // the whole mod at startup, exactly as reflection does, and each compiles cleanly against
+        // the game's assemblies. Measured against the game's own Trivial.CodeSecurity: a
+        // Stopwatch call, Traverse.Create, AccessTools.DeclaredMethod and new Harmony(...) were all
+        // rejected, while the reflection check passed every one of them.
+        //
+        // System.Diagnostics.CodeAnalysis is left out: its attributes are not examined by the game
+        // (measured), and nullable annotations are a normal thing to write. The Harmony type is
+        // looked for as a whole word in the code with its string literals taken out, because the
+        // word is also part of this mod's attribute names, which the game allows, and of log text.
+        // What is not covered: SetterHandler and Traverse exist in the game's Harmony only as
+        // generics, which the game lets through (measured), and a bare Patch, Patches or Code
+        // reached through "using HarmonyLib;" cannot be told apart from this mod's own
+        // CustomPlayerSkin.Patches namespace by text, so only their qualified forms are refused.
+        string[] forbidden =
+        [
+            "System.IO",
+            "System.Diagnostics",
+            "System.Net",
+            "System.Runtime.InteropServices",
+            "RoslynCSharp",
+            "Pug.Platform",
+            "AppDomain",
+            "AccessTools",
+            "Traverse",
+            "FastAccess",
+            "MethodInvoker",
+            "PatchProcessor",
+            "PatchClassProcessor",
+            "ReversePatcher",
+            "FastInvokeHandler",
+            "PatchInfo",
+            "Transpilers",
+            "new Harmony(",
+            "Harmony.",
+            "DllImport",
+        ];
+
+        List<string> offences = [];
+
+        foreach (string file in Directory.EnumerateFiles(
+            Path.Combine(FindRepositoryRoot(), "src", "mod"),
+            "*.cs",
+            SearchOption.AllDirectories))
+        {
+            int number = 0;
+
+            foreach (string line in File.ReadLines(file))
+            {
+                number++;
+                string trimmed = line.TrimStart();
+
+                // Whole lines of comment are prose, as in the reflection check above.
+                if (trimmed.StartsWith("//", StringComparison.Ordinal)
+                    || trimmed.StartsWith("*", StringComparison.Ordinal)
+                    || trimmed.StartsWith("/*", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                string code = line.Replace("System.Diagnostics.CodeAnalysis", string.Empty, StringComparison.Ordinal);
+
+                offences.AddRange(
+                    forbidden
+                        .Where(name => code.Contains(name, StringComparison.Ordinal))
+                        .Select(name => $"{Path.GetFileName(file)}:{number} {name}"));
+
+                // The Harmony type as a word, and the qualified HarmonyLib types, outside strings
+                string bare = System.Text.RegularExpressions.Regex.Replace(code, @"""(?:[^""\\]|\\.)*""", "\"\"");
+                foreach (string pattern in new[] { @"\bHarmony\b", @"\bHarmonyLib\.(Patch|Patches|Code)\b" })
+                {
+                    if (System.Text.RegularExpressions.Regex.IsMatch(bare, pattern))
+                    {
+                        offences.Add($"{Path.GetFileName(file)}:{number} {pattern}");
+                    }
+                }
+            }
+        }
+
+        Assert.True(
+            offences.Count == 0,
+            "MOD のソースが、ゲームのコード検査で拒否される名前を参照している。MOD ごと"
+                + $"読み込まれなくなる:{Environment.NewLine}  "
+                + string.Join($"{Environment.NewLine}  ", offences));
     }
 
     [Fact]

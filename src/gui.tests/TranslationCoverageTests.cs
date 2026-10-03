@@ -472,7 +472,7 @@ public sealed class TranslationCoverageTests
             "action", "anim", "app", "background", "character", "confirm", "dialog", "dir",
             "editor", "env", "error", "gear", "help", "import", "motion", "outline", "pixelart",
             "preset", "presetGroup", "preview", "section", "size", "startup", "status", "tool",
-            "top", "uninstall",
+            "top", "uninstall", "views",
         ];
 
         // _language holds the language's own name and is not a namespace. Only additions fail:

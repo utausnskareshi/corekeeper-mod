@@ -201,6 +201,34 @@ public sealed class SheetLayoutTests : IDisposable
     }
 
     [Fact]
+    public void LoadFile_framesにnullの要素があればNullReferenceではなく説明付きで失敗する()
+    {
+        // A trailing comma or a deleted entry in a hand-edited file leaves a null in the array,
+        // and validation read frame.Index from it: exit code 2 with a stack trace
+        string path = WriteLayout(map =>
+        {
+            List<JsonElement> frames = [.. map["frames"].EnumerateArray()];
+            frames[5] = Json("null");
+            map["frames"] = Json(JsonSerializer.Serialize(frames));
+        });
+
+        ToolException ex = Assert.Throws<ToolException>(() => SheetLayout.LoadFile(path));
+        Assert.Contains("frames[5] が null", ex.Message);
+    }
+
+    [Fact]
+    public void VerifiedOn_verifiedVersionsがnullなら実測元の版だけを返す()
+    {
+        // Treated as a definition written before the list existed. "cks layout" read Count from
+        // the null and ended in NullReferenceException, while every other command used the file
+        string path = WriteLayout(map => map["verifiedVersions"] = Json("null"));
+
+        SheetLayout layout = SheetLayout.LoadFile(path);
+
+        Assert.Equal([layout.GameVersion], layout.VerifiedOn);
+    }
+
+    [Fact]
     public void LoadFile_standingBoxが無ければ説明付きで失敗する()
     {
         string path = WriteLayout(map => map.Remove("standingBox"));

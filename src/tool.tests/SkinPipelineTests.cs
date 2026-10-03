@@ -119,7 +119,8 @@ public sealed class SkinPipelineTests
     {
         using SKBitmap source = Square();
 
-        Assert.Throws<ArgumentNullException>(() => SkinPipeline.Build(null!, Layout, new SkinOptions()));
+        // Cast because Build now also accepts a set of pictures; a bare null matches both
+        Assert.Throws<ArgumentNullException>(() => SkinPipeline.Build((SKBitmap)null!, Layout, new SkinOptions()));
         Assert.Throws<ArgumentNullException>(() => SkinPipeline.Build(source, null!, new SkinOptions()));
         Assert.Throws<ArgumentNullException>(() => SkinPipeline.Build(source, Layout, null!));
     }

@@ -138,7 +138,8 @@ public static class StartupGate
             return null;
         }
 
-        string supported = string.Join(", ", check.Supported);
+        // At the granularity the list is matched on, so a 1.3.0 build is not read as unsupported
+        string supported = GameVersion.DescribeSupported(check.Supported);
 
         // "could not be read" has a translation of its own, so it is resolved per language
         // rather than once. Resolving it once stamped whichever language happened to be

@@ -312,7 +312,11 @@ internal static class LanguageSettings
     public static string? Load() => SettingsFile.Read().Language;
 
     /// <summary>Stores the language, leaving every other setting as it was.</summary>
-    public static void Save(string languageCode) =>
+    /// <returns>
+    /// Whether it reached the file. Thrown away, a folder that could not be written put the
+    /// language back to the default at the next start with no reason given.
+    /// </returns>
+    public static bool Save(string languageCode) =>
         SettingsFile.Update(s => s with { Language = languageCode });
 
     internal static string GetPath() => SettingsFile.GetPath();
@@ -331,7 +335,11 @@ internal static class DisclaimerSettings
         !string.IsNullOrWhiteSpace(SettingsFile.Read().DisclaimerAcceptedVersion);
 
     /// <summary>Records acceptance of the given application version's terms.</summary>
-    public static void Accept(string applicationVersion) =>
+    /// <returns>
+    /// Whether it reached the file. Thrown away, a folder that could not be written asked for the
+    /// terms again at every start - under a notice saying it is shown only once - with no reason.
+    /// </returns>
+    public static bool Accept(string applicationVersion) =>
         SettingsFile.Update(s => s with { DisclaimerAcceptedVersion = applicationVersion });
 
     /// <summary>Forgets the acceptance, so the notice is shown again. Used by the tests.</summary>

@@ -170,6 +170,70 @@ public static class PixelOps
     }
 
     /// <summary>
+    /// Whether the file's colour description - an iCCP profile, or gAMA without an sRGB chunk -
+    /// makes the colours this tool reads differ from the numbers stored in it.
+    ///
+    /// <see cref="Decode(string, out bool)"/> converts into sRGB, so the checks and the window see
+    /// the colours the description asks for. The game does not convert: Texture2D.LoadImage
+    /// ignores the description and uses the stored numbers (measured with Unity 6000.0.59f2, the
+    /// game's own version). A file placed byte for byte therefore shows in the game in other
+    /// colours than the ones checked. Asked of the file itself, by decoding it both ways; a
+    /// difference of one step is the rounding of a profile close to sRGB and does not count.
+    ///
+    /// False when the file cannot be opened: this is asked after a decode has succeeded, and a
+    /// file gone in between has its own message elsewhere.
+    /// </summary>
+    public static bool ColourProfileChangesPixels(string path)
+    {
+        using SKCodec? codec = SKCodec.Create(path);
+
+        // No description, an sRGB chunk or an sRGB profile: converting is the identity
+        if (codec?.Info.ColorSpace is not { IsSrgb: false })
+        {
+            return false;
+        }
+
+        if (codec.Info.Width <= 0 || codec.Info.Height <= 0
+            || (long)codec.Info.Width * codec.Info.Height > MaxSourcePixels)
+        {
+            return false;
+        }
+
+        SKImageInfo info = InfoTemplate.WithSize(codec.Info.Width, codec.Info.Height);
+        using SKBitmap stored = new(info);
+        using SKBitmap converted = new(info);
+
+        // A destination with no colour space asks for no conversion: the stored numbers, which is
+        // what the game uses. The other is what Decode hands everything else here.
+        codec.GetPixels(info, stored.GetPixels());
+        codec.GetPixels(info.WithColorSpace(Srgb), converted.GetPixels());
+
+        // Visible pixels only. A fully transparent one is shown by neither the game nor this tool,
+        // yet some editors keep a colour in it, and that colour moves in the conversion: a grey
+        // picture tagged Display P3, whose visible pixels convert to themselves, was told its
+        // colours would differ. Alpha is not converted, so either side's alpha decides.
+        ReadOnlySpan<byte> a = stored.GetPixelSpan();
+        ReadOnlySpan<byte> b = converted.GetPixelSpan();
+        for (int i = 0; i + 3 < a.Length; i += 4)
+        {
+            if (a[i + 3] == 0)
+            {
+                continue;
+            }
+
+            for (int channel = 0; channel < 4; channel++)
+            {
+                if (Math.Abs(a[i + channel] - b[i + channel]) > 1)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Turns a decoded image the right way up according to the orientation the file declares.
     /// Returns the bitmap untouched when it is already upright.
     /// </summary>
@@ -240,11 +304,12 @@ public static class PixelOps
     /// A stage does not hold one array of this size but several. At the background removal step
     /// the live set is the caller's bitmap, the clone the pipeline made, the copy `src.Pixels`
     /// hands back, the result array, the output bitmap and the flood fill's stack - so a picture
-    /// right at this limit asks for something nearer 1.5 GB than the 256 MB one array would be.
-    /// The limit is deliberately left where it is: lowering it would refuse pictures that work
-    /// today. What it means is that on a machine short of memory the failure arrives as
-    /// SkiaSharp's own English "Unable to allocate pixels for the bitmap" rather than as the
-    /// message below, which is the one that says to shrink the picture first.
+    /// right at this limit asks for far more than the 256 MB one array would be: measured at about
+    /// 2.6 GB for one 8192x8192 picture, and 3.2 to 4.7 GB with the right-facing and back pictures
+    /// that size as well. The limit is deliberately left where it is: lowering it would refuse
+    /// pictures that work today. What it means is that on a machine short of memory the failure
+    /// arrives not as the message below but in one of the three forms
+    /// <see cref="IsAllocationFailure"/> recognises, which the callers turn into the same advice.
     /// </summary>
     public const long MaxSourcePixels = 64L * 1024 * 1024;
 
@@ -265,6 +330,22 @@ public static class PixelOps
                 $"  {MaxSourcePixels / (1024 * 1024)} メガピクセルまで。あらかじめ縮小してから読み込むこと。");
         }
     }
+
+    /// <summary>
+    /// Whether a failure is the memory for the pictures running out, as it arrives from SkiaSharp
+    /// and the runtime.
+    ///
+    /// Three ways, all measured on this machine with 8192x8192 pictures in all three slots and the
+    /// commit limit lowered: OutOfMemoryException, SkiaSharp's own "Unable to allocate pixels for the
+    /// bitmap." (a plain Exception from the SKBitmap constructor), and a native SEHException from
+    /// setting a bitmap's pixels. Only these are recognised, so a caller can say the one useful
+    /// thing - smaller pictures, or fewer of them - without guessing at anything else. A native
+    /// exception can have another cause, which is why a caller keeps the original sentence.
+    /// </summary>
+    public static bool IsAllocationFailure(Exception exception) =>
+        exception is OutOfMemoryException or System.Runtime.InteropServices.SEHException
+        || (exception.GetType() == typeof(Exception)
+            && exception.Message.StartsWith("Unable to allocate pixels", StringComparison.Ordinal));
 
     /// <summary>Writes the bitmap out as a PNG.</summary>
     public static void EncodePng(SKBitmap bitmap, string path)
@@ -571,6 +652,27 @@ public static class PixelOps
     }
 
     /// <summary>
+    /// Scales to a given height, keeping the aspect ratio and letting the width fall where it may.
+    ///
+    /// Used for the facings other than the front, which have to end up exactly as tall as the
+    /// front view: a character that changes height as it turns reads as a different character.
+    /// </summary>
+    public static SKBitmap ResizeToHeight(SKBitmap src, int height, ResampleMode mode)
+    {
+        ArgumentNullException.ThrowIfNull(src);
+
+        if (height <= 0)
+        {
+            throw new ToolException($"配置先の高さが不正: {height}");
+        }
+
+        double scale = (double)height / src.Height;
+        int targetWidth = Math.Max(1, (int)Math.Round(src.Width * scale));
+
+        return ResizeExact(src, targetWidth, height, mode);
+    }
+
+    /// <summary>
     /// Scales to exactly the given size, ignoring the aspect ratio.
     ///
     /// Used to squash and stretch a frame by a pixel or two, which is what makes a walk cycle
@@ -603,7 +705,12 @@ public static class PixelOps
     private static SKBitmap ConvertAlpha(SKBitmap src, SKAlphaType alphaType)
     {
         SKBitmap output = new(new SKImageInfo(src.Width, src.Height, SKColorType.Rgba8888, alphaType));
-        if (!src.CopyTo(output))
+
+        // Read out in the destination's format rather than copied. CopyTo took the source's
+        // alpha type along with its bytes, so the "premultiplied" copy was the unpremultiplied
+        // picture again, and a Smooth resize blended the transparent side's black into the edge
+        using SKPixmap? pixmap = src.PeekPixels();
+        if (pixmap is null || !pixmap.ReadPixels(output.Info, output.GetPixels(), output.RowBytes))
         {
             output.Dispose();
 
@@ -702,7 +809,8 @@ public static class PixelOps
     }
 
     /// <summary>
-    /// Reduces the colour count using median cut. Transparent pixels are left alone.
+    /// Reduces the colour count using median cut - the widest box split along its widest channel,
+    /// at the change of value that leaves both sides most uniform. Transparent pixels are left alone.
     /// Used to give the result the flat colour blocks typical of pixel art.
     /// </summary>
     public static SKBitmap Quantize(SKBitmap src, int colorCount)
@@ -789,30 +897,53 @@ public static class PixelOps
             List<int> source = buckets[targetBucket];
             source.Sort((x, y) => ChannelOf(pixels[x], splitChannel).CompareTo(ChannelOf(pixels[y], splitChannel)));
 
-            // Moved off the median to the nearest change of value. Cutting at the median
-            // position tore a run of one colour in half, and the two halves then averaged to two
-            // different colours - so the more of the picture a flat colour covered, the more
-            // likely it was to come back as several shades.
-            int median = source.Count / 2;
-            int at = ChannelOf(pixels[source[median]], splitChannel);
-
-            int after = median;
-            while (after < source.Count && ChannelOf(pixels[source[after]], splitChannel) == at)
+            // Cut only where the value changes - a cut inside a run of one colour tore it in half,
+            // and the halves averaged to two different shades - and, of those places, where the two
+            // sides are each most nearly one colour: the smallest sum of squared errors over all
+            // three channels. The cut used to be the change of value nearest the median count. With
+            // a little noise on flat colours that cut a large colour again and again while small
+            // ones stayed in one box with their neighbours and were averaged together - skin came
+            // back as the shirt's white, the hair as the outline (the test campaign of 2026-09-30).
+            //
+            // Running sums of each channel and of its square, in the sorted order, price every
+            // candidate cut in constant time.
+            int count = source.Count;
+            long[,] sums = new long[count + 1, 6];
+            for (int k = 0; k < count; k++)
             {
-                after++;
+                for (int channel = 0; channel < 3; channel++)
+                {
+                    long value = ChannelOf(pixels[source[k]], channel);
+                    sums[k + 1, channel] = sums[k, channel] + value;
+                    sums[k + 1, channel + 3] = sums[k, channel + 3] + (value * value);
+                }
             }
 
-            int before = median;
-            while (before > 0 && ChannelOf(pixels[source[before - 1]], splitChannel) == at)
+            int half = -1;
+            double bestError = double.MaxValue;
+            for (int k = 1; k < count; k++)
             {
-                before--;
-            }
+                if (ChannelOf(pixels[source[k - 1]], splitChannel) == ChannelOf(pixels[source[k]], splitChannel))
+                {
+                    continue;
+                }
 
-            // Whichever boundary leaves both sides non-empty and moves the cut least
-            int half =
-                before <= 0 ? after
-                : after >= source.Count ? before
-                : (median - before) <= (after - median) ? before : after;
+                double error = 0;
+                for (int channel = 0; channel < 3; channel++)
+                {
+                    double left = sums[k, channel];
+                    double leftSquares = sums[k, channel + 3];
+                    double right = sums[count, channel] - left;
+                    double rightSquares = sums[count, channel + 3] - leftSquares;
+                    error += (leftSquares - (left * left / k)) + (rightSquares - (right * right / (count - k)));
+                }
+
+                if (error < bestError)
+                {
+                    bestError = error;
+                    half = k;
+                }
+            }
 
             if (half <= 0 || half >= source.Count)
             {

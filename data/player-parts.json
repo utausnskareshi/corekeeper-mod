@@ -2,6 +2,7 @@
     "note":  "Measured from the game to line the starter template up with the real character. Rectangles only; contains no game artwork.",
     "source":  "Measured from the player sprite sheet in the game",
     "version":  "1.2.1.5-8be0",
+    "verifiedVersions": ["1.2.1.5-8be0", "1.3.0.1-90f1", "1.3.0.2-182b", "1.3.0.3-2aca", "1.3.0.4-511d"],
     "parts":  {
                   "body":  {
                                "source":  "Characters/Player Customization/Miner_skin.png",

@@ -9,15 +9,26 @@ namespace CoreKeeperSkinTool.Tests;
 /// <summary>
 /// Tests for the preset characters.
 ///
-/// A preset is a recipe rather than an image, so the things worth checking are that every recipe
-/// actually produces a usable sheet, that no two of them come out looking the same, and that
-/// nothing spills outside its frame.
+/// What every preset owes, whichever kind it is: a usable sheet, all thirty-nine frames filled,
+/// nothing spilling outside its frame, and a look of its own.
+///
+/// Beyond that the two kinds differ. A recipe is drawn from seven colours and a few shape
+/// choices, so it can be asked whether the side frames carry their side cues and whether the
+/// eyes went where eyes go. A picture has whatever its artist put in it, and asking the same
+/// questions of it would be asking about the picture rather than about this code - so the tests
+/// that measure drawing are scoped to the recipes, and the pictures have their own.
 /// </summary>
 public sealed class PresetTests
 {
     private static readonly SheetLayout Layout = SheetLayout.LoadEmbedded();
     private static readonly PartsLayout Parts = PartsLayout.LoadEmbedded();
     private static readonly PresetLibrary Library = PresetLibrary.LoadEmbedded();
+
+    /// <summary>The presets that are drawn from a recipe, which is what the drawing tests measure.</summary>
+    private static IEnumerable<PresetDefinition> Drawn => Library.Presets.Where(p => p.IsDrawn);
+
+    /// <summary>The presets that are a picture instead.</summary>
+    private static IEnumerable<PresetDefinition> Pictured => Library.Presets.Where(p => !p.IsDrawn);
 
     /// <summary>The pixels of one frame, as a comparable string.</summary>
     private static string Signature(SKBitmap sheet, FrameRect frame)
@@ -57,7 +68,9 @@ public sealed class PresetTests
     {
         IReadOnlyList<FrameRect> sideFrames = [.. Layout.Frames.Where(f => f.Dir == "right")];
 
-        foreach (PresetDefinition preset in Library.Presets)
+        // Recipes only. A picture is placed the same way whichever direction the frame faces,
+        // so there is nothing here for it to differ by.
+        foreach (PresetDefinition preset in Drawn)
         {
             using SKBitmap withCues = PresetCharacter.Build(Layout, Parts, preset, sideViewEnabled: true);
             using SKBitmap without = PresetCharacter.Build(Layout, Parts, preset, sideViewEnabled: false);
@@ -94,7 +107,7 @@ public sealed class PresetTests
     [Fact]
     public void 向きの描き分けは右向きのコマ以外を変えない()
     {
-        foreach (PresetDefinition preset in Library.Presets)
+        foreach (PresetDefinition preset in Drawn)
         {
             using SKBitmap withCues = PresetCharacter.Build(Layout, Parts, preset, sideViewEnabled: true);
             using SKBitmap without = PresetCharacter.Build(Layout, Parts, preset, sideViewEnabled: false);
@@ -157,7 +170,9 @@ public sealed class PresetTests
     [InlineData(true)]
     public void 体格の指定はそれぞれ別の絵になる(bool blob)
     {
-        PresetDefinition baseline = Library.Presets.First(p => p.Has("blob") == blob);
+        // A recipe: "build" is a drawing instruction, and a picture has whatever build its
+        // artist drew. Taken from the drawn ones for that reason, not to dodge a failure.
+        PresetDefinition baseline = Drawn.First(p => p.Has("blob") == blob);
         FrameRect frame = Layout.Frames.Single(f => f is { Anim: "idle", Dir: "down" });
 
         Dictionary<string, string> byBuild = [];
@@ -216,7 +231,11 @@ public sealed class PresetTests
         FrameRect[] backFrames = [.. Layout.Frames.Where(f => f.Dir == "up")];
         Assert.NotEmpty(backFrames);
 
-        foreach (PresetDefinition preset in Library.Presets)
+        // Recipes only. This looks for one exact colour, which a recipe uses for eyes and
+        // nothing else; a picture of several hundred colours could hold it anywhere, so the
+        // same check there would be measuring coincidence. What keeps a face off the back of a
+        // picture is HideFaceOnBackFrames, which the placement test below covers.
+        foreach (PresetDefinition preset in Drawn)
         {
             using SKBitmap sheet = PresetCharacter.Build(Layout, Parts, preset);
             SKColor[] pixels = sheet.Pixels;
@@ -242,7 +261,10 @@ public sealed class PresetTests
         // The other half of the rule: skipping the eyes must not have made them disappear
         // from the frames that do face the camera.
         SKColor eyeColour = new(0x1A, 0x1A, 0x22);
-        PresetDefinition preset = Library.Presets.Single(p => p.Key == "adventurer");
+
+        // A recipe, because this looks for the colour a recipe paints eyes with. It used to be
+        // the adventurer, which is now one of the pictures.
+        PresetDefinition preset = Library.Presets.Single(p => p.Key == "golem");
 
         using SKBitmap sheet = PresetCharacter.Build(Layout, Parts, preset);
         SKColor[] pixels = sheet.Pixels;
@@ -499,5 +521,134 @@ public sealed class PresetTests
         }
 
         return first < 0 ? 0 : last - first + 1;
+    }
+
+    // ------------------------------------------------------------ Presets made of a picture
+
+    [Fact]
+    public void 絵のプリセットと描画のプリセットが両方ある()
+    {
+        // Both paths have to stay exercised. Everything below measures the pictures and much of
+        // what is above measures the recipes, and either set would pass vacuously on an empty
+        // collection - which is exactly what a mistyped category or a lost image field produces.
+        Assert.NotEmpty(Pictured);
+        Assert.NotEmpty(Drawn);
+    }
+
+    [Fact]
+    public void 絵のプリセットは背面のコマで顔を隠す()
+    {
+        // The stored picture is a front view, so without this the back of the head carries a
+        // face. Compared against the idle frame of each direction rather than against a colour,
+        // because a picture has no one colour that means "eye".
+        FrameRect front = Layout.Frames.First(f => f.Anim == "idle" && f.Dir == "down");
+        FrameRect back = Layout.Frames.First(f => f.Anim == "idle" && f.Dir == "up");
+
+        foreach (PresetDefinition preset in Pictured)
+        {
+            using SKBitmap sheet = PresetCharacter.Build(Layout, Parts, preset);
+
+            Assert.False(
+                Signature(sheet, front) == Signature(sheet, back),
+                $"{preset.Key}: 背面のコマが正面と同じ絵のまま。顔が後頭部に出る");
+        }
+    }
+
+    [Fact]
+    public void 絵のプリセットは隣のコマへはみ出さない()
+    {
+        // The composer clips to the cell, but the picture arrives at a size nobody chose - it is
+        // whatever came out of cleaning - so the clipping is what stands between a tall hat and
+        // the frame above it.
+        foreach (PresetDefinition preset in Pictured)
+        {
+            using SKBitmap sheet = PresetCharacter.Build(Layout, Parts, preset);
+            SKColor[] pixels = sheet.Pixels;
+
+            HashSet<int> inside = [];
+            foreach (FrameRect frame in Layout.Frames)
+            {
+                for (int y = 0; y < frame.H; y++)
+                {
+                    for (int x = 0; x < frame.W; x++)
+                    {
+                        inside.Add(((frame.YTopLeft + y) * sheet.Width) + frame.X + x);
+                    }
+                }
+            }
+
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                if (pixels[i].Alpha != 0 && !inside.Contains(i))
+                {
+                    Assert.Fail($"{preset.Key}: コマの外に画素がある (index {i})");
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void 絵のプリセットはコマの縁に触れない()
+    {
+        // What being too large looks like once it has happened. The composer clips to the cell,
+        // so art that did not fit is not reported by anything the sheet itself can be asked -
+        // it just arrives with its hat or its shoulders sliced off at the boundary. The game's
+        // own character keeps three pixels of air on each side and two below, so a picture
+        // reaching the edge has been cut.
+        foreach (PresetDefinition preset in Pictured)
+        {
+            using SKBitmap sheet = PresetCharacter.Build(Layout, Parts, preset);
+            SKColor[] pixels = sheet.Pixels;
+
+            foreach (FrameRect frame in Layout.Frames)
+            {
+                for (int y = 0; y < frame.H; y++)
+                {
+                    for (int x = 0; x < frame.W; x++)
+                    {
+                        bool edge = x == 0 || y == 0 || x == frame.W - 1 || y == frame.H - 1;
+                        if (!edge)
+                        {
+                            continue;
+                        }
+
+                        Assert.True(
+                            pixels[((frame.YTopLeft + y) * sheet.Width) + frame.X + x].Alpha == 0,
+                            $"{preset.Key}: コマ {frame.Index} の縁に画素がある。絵が大きすぎて切れている");
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void 埋め込んだ絵はすべてどれかのプリセットが使う()
+    {
+        // The other direction of the same contract the library checks. A picture left behind
+        // after its preset was renamed costs every user the download of a file nothing reads,
+        // and nothing else would ever mention it.
+        HashSet<string> used = [.. Pictured.Select(p => p.Image!)];
+
+        foreach (string name in PresetArt.Names())
+        {
+            Assert.True(used.Contains(name), $"どのプリセットも使っていない絵が埋め込まれている: {name}");
+        }
+    }
+
+    [Fact]
+    public void 埋め込まれていない絵を指すプリセットを拒否する()
+    {
+        PresetLibrary library = new()
+        {
+            Categories = ["job"],
+            Presets =
+            [
+                new PresetDefinition { Key = "ghostly", Category = "job", Image = "no-such-file.png" },
+            ],
+        };
+
+        ToolException error = Assert.Throws<ToolException>(library.Validate);
+
+        Assert.Contains("no-such-file.png", error.Message, StringComparison.Ordinal);
     }
 }

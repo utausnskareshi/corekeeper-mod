@@ -8,7 +8,7 @@
         x:Class="CoreKeeperSkinTool.Gui.Views.MainWindow"
         Icon="/Assets/icon.ico"
         x:DataType="vm:MainViewModel"
-        Title="{loc:Tr app.title}"
+        Title="{Binding WindowTitle}"
         Width="1520" Height="920"
         MinWidth="1100" MinHeight="700"
         DragDrop.AllowDrop="True">
@@ -231,7 +231,7 @@
 
     <!-- Environment status: keeps game detection and mod install state permanently visible -->
     <Border Grid.Row="1" Padding="10,6" Background="#1A2A4A" x:Name="EnvironmentBar">
-      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" RowDefinitions="Auto,Auto">
         <TextBlock Grid.Column="0" Classes="onDark" VerticalAlignment="Center" TextWrapping="Wrap"
                    Text="{Binding EnvironmentStatus}" />
         <Button Grid.Column="1" x:Name="GamePathButton" Classes="subtle" Padding="10,5" Margin="0,0,12,0"
@@ -255,6 +255,15 @@
                 IsEnabled="{Binding CanInstallMod}"
                 Content="{Binding ModButtonLabel}"
                 ToolTip.Tip="{Binding ModButtonTip}" />
+        <!-- The game refused the mod the last time it started, as its own log says. A row of its
+             own under the rest, the width of the bar: the reason and what to do about it run to a
+             sentence or two, which beside the buttons would wrap into a narrow column. The lines
+             from the log sit behind it, since they are English and long. -->
+        <TextBlock Grid.Row="1" Grid.ColumnSpan="5" Margin="0,4,0,0" TextWrapping="Wrap"
+                   Foreground="#FFB454"
+                   IsVisible="{Binding HasModLoadWarning}"
+                   Text="{Binding ModLoadWarning}"
+                   ToolTip.Tip="{Binding ModLoadWarningDetail}" />
       </Grid>
     </Border>
 
@@ -352,13 +361,37 @@
                     Margin="16,2,0,0" Content="{loc:Tr motion.shiftOnly}" />
           <TextBlock Classes="hint" Text="{loc:Tr motion.hint}" />
 
-          <CheckBox IsChecked="{Binding MirrorSideFrames}" Margin="0,6,0,0"
-                    Content="{loc:Tr motion.mirrorSide}" />
+          <!-- Both stand in for art that was not supplied, so composing ignores them outright
+               once it is. Left enabled, ticking one started a conversion and produced a sheet
+               not one pixel different, with nothing on screen to say why. -->
+          <CheckBox IsChecked="{Binding MirrorSideFrames}" IsEnabled="{Binding !HasSideImage}"
+                    Margin="0,6,0,0" Content="{loc:Tr motion.mirrorSide}" />
           <TextBlock Classes="hint" Text="{loc:Tr motion.mirrorSideHint}" />
 
-          <CheckBox IsChecked="{Binding HideFaceOnBackFrames}" Margin="0,6,0,0"
-                    Content="{loc:Tr motion.hideBackFace}" />
+          <CheckBox IsChecked="{Binding HideFaceOnBackFrames}" IsEnabled="{Binding !HasBackImage}"
+                    Margin="0,6,0,0" Content="{loc:Tr motion.hideBackFace}" />
           <TextBlock Classes="hint" Text="{loc:Tr motion.hideBackFaceHint}" />
+
+          <!-- Optional throughout. With neither picture supplied the sheet is built exactly as
+               it always was, from the front view alone. -->
+          <TextBlock Classes="section" Text="{loc:Tr section.views}" />
+          <TextBlock Classes="hint" Text="{loc:Tr views.hint}" />
+
+          <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+            <Button x:Name="SideImageButton" Grid.Column="0" HorizontalAlignment="Stretch"
+                    Content="{loc:Tr views.side}" />
+            <Button x:Name="ClearSideImageButton" Grid.Column="1" Margin="4,0,0,0"
+                    IsEnabled="{Binding HasSideImage}" Content="{loc:Tr views.clear}" />
+          </Grid>
+          <TextBlock Classes="hint" Text="{Binding SideImageLabel}" />
+
+          <Grid ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+            <Button x:Name="BackImageButton" Grid.Column="0" HorizontalAlignment="Stretch"
+                    Content="{loc:Tr views.back}" />
+            <Button x:Name="ClearBackImageButton" Grid.Column="1" Margin="4,0,0,0"
+                    IsEnabled="{Binding HasBackImage}" Content="{loc:Tr views.clear}" />
+          </Grid>
+          <TextBlock Classes="hint" Text="{Binding BackImageLabel}" />
           </StackPanel>
         </StackPanel>
       </ScrollViewer>
@@ -465,8 +498,11 @@
           </StackPanel>
         </Border>
 
+        <!-- BringIntoViewOnFocusChange off: pressing the canvas gives it focus, and bringing it
+             into view scrolled the sheet by the padding between the press and the first move,
+             so the first segment of a stroke ran to a pixel the pointer never touched. -->
         <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                      Padding="10" Background="#0C000000">
+                      Padding="10" Background="#0C000000" BringIntoViewOnFocusChange="False">
           <ed:PixelCanvas x:Name="Canvas"
                           HorizontalAlignment="Left" VerticalAlignment="Top"
                           Source="{Binding SheetImage}"
@@ -555,9 +591,18 @@
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:CharacterChoice">
                   <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,1">
+                    <!-- The name is a TextBlock, not the CheckBox's string Content. The theme turns a
+                         string Content into AccessText, which dropped the first "_" of the name the
+                         player typed and made the letter after it an Alt shortcut ticking this row.
+                         With a control as Content the automation peer takes the row's name from
+                         the presenter's TextBlock once it exists; before the row is laid out it
+                         falls back to Content.ToString(), "Avalonia.Controls.TextBlock". The name
+                         is given directly so that it does not depend on the layout. -->
                     <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected}"
-                              Content="{Binding Display}"
-                              ToolTip.Tip="{Binding Tooltip}" />
+                              AutomationProperties.Name="{Binding Display}"
+                              ToolTip.Tip="{Binding Tooltip}">
+                      <TextBlock Text="{Binding Display}" />
+                    </CheckBox>
                     <TextBlock Grid.Column="1" Classes="value" VerticalAlignment="Center"
                                Text="{Binding StateLabel}" />
                     <!-- Deliberately plain and at the far edge of the row. The tick beside it arms

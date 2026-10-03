@@ -273,16 +273,34 @@ public static class PathSafety
         {
             directory.Delete(recursive: true);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Windows completes a delete after the last handle closes, so a recursive delete can
             // report failure for a folder that is on its way out - a junction inside it is enough
             // to produce this. Reporting a removal as failed when it has in fact happened sends
             // the user looking for files that are no longer there, so the outcome decides.
             directory.Refresh();
-            if (directory.Exists)
+            if (!directory.Exists)
             {
-                throw;
+                return;
+            }
+
+            // A junction inside is removed as a link, but .NET first tries DeleteVolumeMountPoint
+            // on it, which an ordinary user is refused, and throws that refusal once the link is
+            // already gone - leaving only the folders around it, now free of links (measured on
+            // .NET 9.0.4, Windows 11, not elevated). One more pass takes those. Something really in
+            // the way, such as a file held open, is in the way again, and that pass names it.
+            try
+            {
+                directory.Delete(recursive: true);
+            }
+            catch (Exception retry) when (retry is IOException or UnauthorizedAccessException)
+            {
+                directory.Refresh();
+                if (directory.Exists)
+                {
+                    throw;
+                }
             }
         }
     }

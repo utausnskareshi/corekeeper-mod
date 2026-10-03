@@ -10,7 +10,10 @@
 
 param(
     # win-x64 / linux-x64
-    [string[]]$Runtimes = @('win-x64')
+    [string[]]$Runtimes = @('win-x64'),
+    # Build from a working tree with uncommitted changes anyway, for a trial package. Its product
+    # version then says so with a "-dirty" suffix.
+    [switch]$AllowDirty
 )
 
 $ErrorActionPreference = 'Stop'
@@ -48,6 +51,30 @@ if ($newer) {
 
 Write-Output ("同梱する MOD: {0} ({1} KB)" -f $payload, [math]::Round((Get-Item -LiteralPath $payload).Length / 1KB, 1))
 
+# The product version's +hash is stamped by the SDK from HEAD, and it cannot see uncommitted
+# changes: a package built before committing claimed the commit before the one it contained (the
+# package of 2026-09-29 did). Refused unless asked for, and marked when it is.
+$revisionArgs = @()
+if (Get-Command git -ErrorAction SilentlyContinue) {
+    # Windows PowerShell 5.1 turns a redirected native stderr line into a terminating error under Stop
+    $changes = & { $ErrorActionPreference = 'Continue'; git -C $repoRoot status --porcelain -- src data packaging scripts LICENSE THIRD-PARTY-NOTICES.md 2>$null }
+    $gitExit = $LASTEXITCODE
+    if ($gitExit -eq 0 -and $changes) {
+        if (-not $AllowDirty) {
+            throw ("未コミットの変更がある:`n" + ($changes -join "`n") + "`n" +
+                "製品バージョンは HEAD のコミットを名乗るため、先にコミットしてから作り直すこと（試しに作るだけなら -AllowDirty）。")
+        }
+        $head = & { $ErrorActionPreference = 'Continue'; git -C $repoRoot rev-parse HEAD 2>$null }
+        $revisionArgs = @("-p:SourceRevisionId=$head-dirty")
+        Write-Warning "未コミットの変更を含めて作る。製品バージョンに -dirty を付ける。"
+    }
+    elseif ($gitExit -ne 0) {
+        # A source tree without .git - an archive download, say. The SDK stamps no hash then, so
+        # nothing false is claimed.
+        Write-Warning "git の作業ツリーではないため、未コミットの変更を確かめられない (exit=$gitExit)"
+    }
+}
+
 foreach ($runtime in $Runtimes) {
     Write-Output ''
     Write-Output "=== $runtime ==="
@@ -63,6 +90,9 @@ foreach ($runtime in $Runtimes) {
         # Keep the output: piping it away hides the reason a publish failed, leaving only
         # an exit code to go on. CksRequireModPayload turns a missing bundled mod into a
         # build error, so a release can never ship with the install button disabled.
+        # DebugType=none: no symbols are shipped (the .pdb files are deleted below), and an
+        # assembly built with them records where its .pdb was written - a folder on this
+        # machine - so that path went out inside every released executable.
         $publishLog = & dotnet publish (Join-Path $repoRoot $project) `
             -c Release `
             -r $runtime `
@@ -70,7 +100,9 @@ foreach ($runtime in $Runtimes) {
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
             -p:EnableCompressionInSingleFile=true `
+            -p:DebugType=none `
             -p:CksRequireModPayload=true `
+            @revisionArgs `
             -o $stage `
             --nologo 2>&1
 

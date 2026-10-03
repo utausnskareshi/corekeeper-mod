@@ -73,6 +73,14 @@ namespace CustomPlayerSkin
         /// <summary>
         /// The character another player is using, read from their entity.
         ///
+        /// From PlayerGhost.playerGuid: the joining client fills it with its own
+        /// SaveManager.GetCharacterGuid() - the save's characterGuid - and the game itself tells
+        /// players apart by it. CharacterGuidCD, read before, is the identifier the game gives
+        /// merchants and other NPCs (every writer of it is NPC code on 1.3.0.2), so with
+        /// localPlayerOnly turned off no other player was ever matched. It is turned back into
+        /// UnityEngine.Hash128 before ToString: Unity.Entities.Hash128 prints its digits in another
+        /// order, and the local identifier comes from UnityEngine.Hash128.
+        ///
         /// Every step is checked because this runs while the world is being built and torn down,
         /// where the entity can be gone or the component not yet added.
         /// </summary>
@@ -93,12 +101,20 @@ namespace CustomPlayerSkin
                 }
 
                 EntityManager entities = world.EntityManager;
-                if (!entities.Exists(entity) || !entities.HasComponent<CharacterGuidCD>(entity))
+                if (!entities.Exists(entity) || !entities.HasComponent<PlayerGhost>(entity))
                 {
                     return null;
                 }
 
-                return Normalize(entities.GetComponentData<CharacterGuidCD>(entity).Value.ToString());
+                // All zeros until the ghost has been replicated
+                Unity.Entities.Hash128 id = entities.GetComponentData<PlayerGhost>(entity).playerGuid;
+                if (!id.IsValid)
+                {
+                    return null;
+                }
+
+                UnityEngine.Hash128 saved = id;
+                return Normalize(saved.ToString());
             }
             catch (Exception ex)
             {

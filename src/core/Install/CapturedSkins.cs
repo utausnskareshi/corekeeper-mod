@@ -41,11 +41,26 @@ public static class CapturedSkins
     public const int SupportedFormat = 1;
 
     /// <summary>
-    /// The bands, in the order the game draws them. Earlier ones sit underneath.
+    /// The bands, in the order they sit in the file, top to bottom. This is the format the mod
+    /// writes, not the order the game draws them in - that is <see cref="DrawOrder"/>.
     /// </summary>
     public static readonly string[] Layers =
     [
         "body", "hair", "hairShade", "eyes", "shirt", "pants", "helm", "breastArmor", "pantsArmor",
+    ];
+
+    /// <summary>
+    /// The layers in the order the game draws them, first at the bottom.
+    ///
+    /// Measured on the 1.3.0.2 Player prefab: all nine share one sorting layer, and their sorting
+    /// orders are body 0, hairShade 1, eyes 2, hair 3, pants 4, shirt 5, pantsArmor 6,
+    /// breastArmor 7, helm 10, with the z positions agreeing. Stacking in file order instead put the
+    /// trousers over the shirt, the hair shading and eyes over the hair, leg armour over chest
+    /// armour and the helmet under both.
+    /// </summary>
+    public static readonly string[] DrawOrder =
+    [
+        "body", "hairShade", "eyes", "hair", "pants", "shirt", "pantsArmor", "breastArmor", "helm",
     ];
 
     /// <summary>
@@ -187,7 +202,7 @@ public static class CapturedSkins
                 Environment.NewLine + "  MOD とアプリの版を揃えること。");
         }
 
-        // The band order decides which layer ends up on top, so a different one is refused
+        // The band order says which band holds which layer, so a different one is refused
         // outright. Compositing it anyway produces a sheet of the right size and the wrong picture.
         if (manifest.Layers is null || !manifest.Layers.SequenceEqual(Layers))
         {
@@ -250,13 +265,15 @@ public static class CapturedSkins
         SKColor[] source = stacked.Pixels;
         SKColor[] target = result.Pixels;
 
-        for (int band = 0; band < Layers.Length; band++)
+        // In the order the game draws them; each band is found where the file keeps it
+        foreach (string layer in DrawOrder)
         {
-            if (!includeEquipment && EquipmentLayers.Contains(Layers[band]))
+            if (!includeEquipment && EquipmentLayers.Contains(layer))
             {
                 continue;
             }
 
+            int band = Array.IndexOf(Layers, layer);
             int offset = band * height * width;
 
             for (int i = 0; i < target.Length; i++)

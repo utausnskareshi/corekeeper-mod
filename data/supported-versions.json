@@ -4,8 +4,8 @@
     "",
     "The mod reaches into the game's own types: PlayerController's sprite sheet layers,",
     "SpriteSheetSkin.SetSkin, SaveManager.GetCharacterGuid and the 234x156 / 39-frame sheet",
-    "layout. A game update is free to move any of those, so the tool refuses to run against a",
-    "version nobody has checked rather than writing files that might do nothing, or worse.",
+    "layout. A game update is free to move any of those, so the tool warns before it is used on a",
+    "version nobody has checked, because what it writes there might do nothing, or worse.",
     "",
     "Entries are matched on the leading major.minor.patch, which is the same granularity the",
     "game itself uses (Manager.versionRegex is ^(\\d+)\\.(\\d+)\\.(\\d+)). The build suffix that",
@@ -13,9 +13,30 @@
     "",
     "Widening this list is the whole job of supporting a new game version: verify the layout",
     "with scripts/generate-layout.ps1 and the part boxes with scripts/generate-parts-layout.ps1,",
-    "then add the version here."
+    "add the build to verifiedVersions in player-body-layout.json and player-parts.json, then",
+    "add the version here. A test refuses a version listed here that player-body-layout.json",
+    "does not name; the copy in player-parts.json is there so that file says so too.",
+    "",
+    "1.3.0.1 is in the list on one measurement, not two: every frame rectangle and all 299",
+    "part boxes came out identical to 1.2.1, so the data files name both builds.",
+    "",
+    "1.3.0.2-182b (Steam build 25442602) was measured the same way: the frame rectangles, all",
+    "299 part boxes, the mod compile and the hook targets came out identical, so the data files",
+    "name it too. No new entry is needed here, because entries match on 1.3.0.",
+    "",
+    "1.3.0.3-2aca (Steam build 25537589, 2026-09-29) as well: the player bundles are byte-identical",
+    "to 1.3.0.2, the frame rectangles, all 299 part boxes, the drawing order of the nine layers and",
+    "the skin colours the game swaps came out identical, the mod compiles and passes the game's own",
+    "code check, and the game itself loaded it. Again no new entry: 1.3.0 already covers it.",
+    "",
+    "1.3.0.4-511d (Steam build 25625027, 2026-10-02) too: the sprite bundles are byte-identical to",
+    "1.3.0.3, the bundle holding the player prefab only gained six unrelated objects (the nine layers,",
+    "their drawing order, the animator, its clips and the skin colours came out identical), the code",
+    "that changed is three methods of the continuous-attack state, the mod compiles and passes the",
+    "game's own code check, and the game loaded it, drew with it and reloaded a replaced picture."
   ],
   "supported": [
-    "1.2.1"
+    "1.2.1",
+    "1.3.0.1"
   ]
 }

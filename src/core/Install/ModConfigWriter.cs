@@ -113,7 +113,20 @@ public static class ModConfigWriter
         {
             foreach ((string path, string staging) in pending)
             {
-                File.Move(staging, path, overwrite: true);
+                // The read-only attribute is cleared only once the move has objected to it, as
+                // CharacterSkins does for the skins. Left alone, a backup or sync product that
+                // marked one of the four made every attempt stop at it: half switched, "もう一度
+                // 実行すると残りも切り替わる", and no attempt ever getting past it.
+                try
+                {
+                    File.Move(staging, path, overwrite: true);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    PathSafety.ClearReadOnly(path);
+                    File.Move(staging, path, overwrite: true);
+                }
+
                 written.Add(path);
             }
         }

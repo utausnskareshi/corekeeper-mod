@@ -1,0 +1,15 @@
+<Project>
+  <!--
+    The version of everything built from here: cks, cks-gui and the library they share. It follows
+    the game's major.minor.patch - 1.3.0 for Core Keeper 1.3.0.x - so the number says which game
+    the tool is made for. The mod inside keeps a version of its own (ModVersion in
+    src/mod/CustomPlayerSkinMod.cs), which only the game's log shows.
+
+    StartupGate.ApplicationVersion records this when the terms are accepted, but only whether
+    anything was recorded decides if they are asked again (DisclaimerSettings.IsAccepted), so a new
+    version does not ask anyone to accept them again.
+  -->
+  <PropertyGroup>
+    <Version>1.3.0</Version>
+  </PropertyGroup>
+</Project>

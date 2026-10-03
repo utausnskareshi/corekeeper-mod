@@ -1,6 +1,10 @@
 using System.Reflection;
 using CoreKeeperSkinTool.Gui.Localization;
 using System.Text.Json;
+using CoreKeeperSkinTool.Imaging;
+using CoreKeeperSkinTool.Layout;
+using CoreKeeperSkinTool.Sheet;
+using SkiaSharp;
 
 namespace CoreKeeperSkinTool.Gui.Tests;
 
@@ -173,6 +177,58 @@ public sealed class LocalizationTests
 
         // And so does anything that is not a ToolException at all
         Assert.Equal("よそのエラー", Loc.Instance.Describe(new InvalidOperationException("よそのエラー")));
+    }
+
+    [Fact]
+    public void 向きが空になったエラーは両言語で数字が正しい位置に入る()
+    {
+        // These keys are the ones the scan cannot see. Every other keyed error hands its key over
+        // as a literal, so TranslationCoverageTests can read the call and count what it supplies;
+        // these are chosen from a table and passed in a variable, which that scan skips (its own
+        // comment says so of the two facingVanished keys). Nothing else would notice if the
+        // arguments went in the wrong order and the window showed the placement size as an offset.
+        //
+        // Driven through the pipeline rather than by building the exception here, so that what is
+        // pinned is the order Build actually passes, not a copy of it written alongside.
+        using SKBitmap front = Solid(40, 60, SKColors.Red);
+        using SKBitmap side = Solid(200, 60, SKColors.Green);
+
+        ToolException error = Assert.Throws<ToolException>(() => SkinPipeline.Build(
+            new SkinSources(front, side),
+            SheetLayout.LoadEmbedded(),
+            new SkinOptions(OffsetX: 21)));
+
+        Assert.Equal("error.pipeline.facingEmptyFront", error.MessageKey);
+
+        Loc.Instance.Current = Loc.Instance.Languages.Single(l => l.Code == "ja");
+        Assert.Contains("横 21 / 縦 0、配置サイズ 16x19", Loc.Instance.Describe(error), StringComparison.Ordinal);
+
+        Loc.Instance.Current = Loc.Instance.Languages.Single(l => l.Code == "en");
+        string english = Loc.Instance.Describe(error);
+        Assert.Contains("horizontal 21 / vertical 0, placement size 16x19", english, StringComparison.Ordinal);
+        Assert.DoesNotContain("正面", english, StringComparison.Ordinal);
+
+        // The fifth key takes the facing's own spelling first, so its numbers sit one place along.
+        // A layout may name its facings anything, and that name is quoted back rather than
+        // translated - it came from the user's file.
+        Assert.Contains(
+            "horizontal 1 / vertical 2, placement size 3x4",
+            Loc.Instance.Format("error.pipeline.facingEmptyNamed", "SIDEWAYS", 1, 2, 3, 4),
+            StringComparison.Ordinal);
+
+        Loc.Instance.Current = Loc.Instance.Languages.Single(l => l.Code == "ja");
+        string named = Loc.Instance.Format("error.pipeline.facingEmptyNamed", "SIDEWAYS", 1, 2, 3, 4);
+        Assert.StartsWith("SIDEWAYS", named, StringComparison.Ordinal);
+        Assert.Contains("横 1 / 縦 2、配置サイズ 3x4", named, StringComparison.Ordinal);
+    }
+
+    private static SKBitmap Solid(int width, int height, SKColor colour)
+    {
+        SKBitmap bitmap = PixelOps.CreateEmpty(width, height);
+        SKColor[] pixels = new SKColor[width * height];
+        Array.Fill(pixels, colour);
+        bitmap.Pixels = pixels;
+        return bitmap;
     }
 
     [Fact]

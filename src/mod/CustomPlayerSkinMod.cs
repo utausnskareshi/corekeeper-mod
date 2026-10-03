@@ -23,7 +23,13 @@ namespace CustomPlayerSkin
     public class CustomPlayerSkinMod : IMod
     {
         public const string ModName = "CustomPlayerSkin";
-        public const string ModVersion = "0.3.0";
+        /// <summary>
+        /// Written to the log as the mod loads, so a log says which build ran. It stood at 0.3.0 from
+        /// the first release through every later change, and telling whether a report came from the
+        /// build before a fix meant comparing the loader's working copy of the scripts by hand.
+        /// Raise it whenever what the mod does changes.
+        /// </summary>
+        public const string ModVersion = "0.4.1";
 
         /// <summary>Directory holding the settings and images, relative to the game's mod settings area.</summary>
         public const string RootDirectory = ModName + "/";
@@ -75,10 +81,13 @@ namespace CustomPlayerSkin
         }
 
         /// <summary>
-        /// How long a character may go undrawn before its entry is dropped.
+        /// How long a character may go without a rebuild before its entry is dropped, unless the
+        /// character is still on screen.
         ///
         /// Generous on purpose: re-reading one image is cheap, and an entry that is dropped while
-        /// its character is merely off screen costs only that.
+        /// its character is merely off screen costs only that. Whether a character is still drawn
+        /// cannot be told from LastSeen alone - it moves only when the game rebuilds a look - so
+        /// the characters on screen are looked for when entries expire, and theirs are kept.
         /// </summary>
         private const float EntryLifetimeSeconds = 300f;
 
@@ -243,7 +252,7 @@ namespace CustomPlayerSkin
                     return;
                 }
 
-                int interval = _config.ReloadIntervalSeconds.Value;
+                int interval = ReloadInterval();
                 if (interval <= 0)
                 {
                     // Hot reload is switched off. Look again in a while in case it is switched
@@ -281,6 +290,29 @@ namespace CustomPlayerSkin
             }
         }
 
+        /// <summary>
+        /// How often to look for changed images, in seconds; 0 or less means not at all.
+        ///
+        /// A missing settings file does not read as the registered default on 1.3.0.2: the
+        /// game's get_Value returns default(T), 0 here. That is the state the tool's "Remove mod"
+        /// leaves while the game runs - the images and every setting go together - and 0 meant
+        /// "reloading is off", so the removed image stayed on screen, and with the hide settings
+        /// reading false as well, the game's own hair and clothes were drawn over it at the next
+        /// rebuild. With the file gone the registered default is used, so the removal is noticed
+        /// and the original look comes back. Only a missing file falls back: a file saying 0 still
+        /// turns reloading off, and the usual poll asks nothing extra.
+        /// </summary>
+        private int ReloadInterval()
+        {
+            int interval = _config.ReloadIntervalSeconds.Value;
+            if (interval <= 0 && SkinStore.Exists(ConfigValues.ReloadIntervalFile) == FileState.Missing)
+            {
+                return ConfigValues.DefaultReloadIntervalSeconds;
+            }
+
+            return interval;
+        }
+
         /// <summary>How long to wait after a failed poll before trying again.</summary>
         private const float ReloadBackoffSeconds = 30f;
 
@@ -310,7 +342,13 @@ namespace CustomPlayerSkin
                     continue;
                 }
 
-                if (SkinStore.HasChangedSince(PathFor(pair.Key), pair.Value.Timestamp))
+                // A version that is failing and whose file has since gone counts as a change too.
+                // For a character whose picture never loaded, the recorded time stays 0 while a
+                // rewritten bad file keeps failing, and a removed file reads 0 as well - so the
+                // removal went unseen, the failure count was never reset, and the next bad picture
+                // put there said nothing at all.
+                if (SkinStore.HasChangedSince(PathFor(pair.Key), pair.Value.Timestamp)
+                    || (pair.Value.FailedTimestamp != 0 && SkinStore.GetTimestamp(PathFor(pair.Key)) == 0))
                 {
                     // Only a reload that actually produced a different texture is worth a
                     // rebuild. Counting every attempt meant a file that kept changing and kept
@@ -329,10 +367,39 @@ namespace CustomPlayerSkin
 
             if (expired is not null)
             {
+                // Characters still on screen keep their entries. LastSeen moves only when the
+                // game rebuilds a look, and a character standing in the same equipment never gets
+                // one, so the character being played went "unseen" every five minutes while drawn
+                // the whole time. Dropping it rebuilt every player, re-read and re-decoded the same
+                // image - the ten "画像を読み込んだ" lines one real session on 1.3.0.2 logged - and
+                // for a character with no image said "no image" again every five minutes. Asked
+                // once, only when something has expired, with the identity the entries are keyed by.
+                HashSet<string>? onScreen = null;
+                foreach (PlayerController player in Object.FindObjectsByType<PlayerController>(
+                             FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                {
+                    if (player == null)
+                    {
+                        continue;
+                    }
+
+                    string? id = CharacterIdentity.For(player);
+                    if (id != null)
+                    {
+                        (onScreen ??= new HashSet<string>()).Add(id);
+                    }
+                }
+
                 foreach (string guid in expired)
                 {
                     if (Skins.TryGetValue(guid, out SkinEntry entry))
                     {
+                        if (onScreen != null && onScreen.Contains(guid))
+                        {
+                            entry.LastSeen = now;
+                            continue;
+                        }
+
                         // Dropping an entry that still has a texture has to be followed by a
                         // rebuild. LastSeen is only touched by SkinFor, and SkinFor is reached
                         // from the equipment-changed and respawn hooks - not from anything that
@@ -343,10 +410,14 @@ namespace CustomPlayerSkin
                         //
                         // Marking it changed sends it through the same path a deleted image
                         // takes, which re-reads the file and puts the character back as it was.
-                        if (entry.Texture != null)
-                        {
-                            changed = true;
-                        }
+                        //
+                        // An entry with no texture needs the rebuild as well. It is how a character
+                        // with no image yet is watched for one, and dropping it quietly left
+                        // nothing to poll: an image placed after five minutes of drawing in the
+                        // tool, with the game left running as the tool says it can be, was never
+                        // picked up until the character changed equipment or respawned. The
+                        // rebuild puts the entry back for every character still on screen.
+                        changed = true;
 
                         Discard(entry);
                         Skins.Remove(guid);
@@ -385,12 +456,13 @@ namespace CustomPlayerSkin
         {
             string current =
                 (_config.LocalPlayerOnly.Value ? "1" : "0") +
-                (_config.HideHair.Value ? "1" : "0") +
-                (_config.HideEyes.Value ? "1" : "0") +
-                (_config.HideShirt.Value ? "1" : "0") +
-                (_config.HidePants.Value ? "1" : "0") +
-                (_config.HideHelm.Value ? "1" : "0") +
-                (_config.HideArmor.Value ? "1" : "0");
+                // The values Apply uses, so a setting written back after its file was gone is noticed
+                (_config.HairHidden ? "1" : "0") +
+                (_config.EyesHidden ? "1" : "0") +
+                (_config.ShirtHidden ? "1" : "0") +
+                (_config.PantsHidden ? "1" : "0") +
+                (_config.HelmHidden ? "1" : "0") +
+                (_config.ArmorHidden ? "1" : "0");
 
             if (current == _lastSettings)
             {
@@ -442,11 +514,21 @@ namespace CustomPlayerSkin
                 }
 
                 entry.Timestamp = timestamp;
+
+                // A picture put back after this is a new one and is reported afresh. Without it, a
+                // bad file placed after a long run of failures would say nothing at all, now that
+                // the reasons below are capped as well.
+                entry.ConsecutiveFailures = 0;
+
+                // Forgotten with the file, so the poll stops sending this entry here every time
+                entry.FailedTimestamp = 0;
                 Discard(entry);
                 return;
             }
 
-            Texture2D? loaded = SkinStore.LoadTexture(path);
+            // The reasons are capped with this method's own lines: past the limit a file that is
+            // rewritten and still failing has nothing new to say, and SkinStore wrote one on every poll
+            Texture2D? loaded = SkinStore.LoadTexture(path, logFailures: entry.ConsecutiveFailures < MaxTotalLoadFailures);
             if (loaded == null)
             {
                 // A file caught mid-write has to be retried, so the timestamp is not recorded

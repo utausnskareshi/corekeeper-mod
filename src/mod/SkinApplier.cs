@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace CustomPlayerSkin
@@ -65,14 +66,29 @@ namespace CustomPlayerSkin
             // Each setting is read once. This runs for every player on every appearance rebuild,
             // and HideHair alone was being read twice; how much work an IConfigEntry does behind
             // its Value property is not this mod's to assume.
-            bool hideHair = config.HideHair.Value;
-            bool hideEyes = config.HideEyes.Value;
-            bool hideShirt = config.HideShirt.Value;
-            bool hidePants = config.HidePants.Value;
-            bool hideHelm = config.HideHelm.Value;
-            bool hideArmor = config.HideArmor.Value;
+            // Read through ConfigValues.Hidden, which falls back to the registered default when a
+            // setting's file is gone (after "Remove mod" while the game runs).
+            bool hideHair = config.HairHidden;
+            bool hideEyes = config.EyesHidden;
+            bool hideShirt = config.ShirtHidden;
+            bool hidePants = config.PantsHidden;
+            bool hideHelm = config.HelmHidden;
+            bool hideArmor = config.ArmorHidden;
 
             SetLayer(player.bodySkin, skin);
+
+            // The picture already holds its final colours. The body layer's colour table maps the
+            // game's skin palette (#EBC3BB #D29A7C #B57A47 #915B26 on 1.3.0.2) onto the skin tone the
+            // character was made with, and the shader applies it to the replacement texture too - so
+            // pixels of the picture in those four colours came out in the character's skin tone. A
+            // fetched look always has them, since the game's own hair and clothes use them. The table
+            // is made an identity here, after the game set the real one in the same rebuild; its
+            // next rebuild sets the real one again, which is also what puts it back when the picture
+            // is taken off.
+            if (player.skinColorReplacer != null)
+            {
+                player.skinColorReplacer.SetColorReplacement(IdentityColours, IdentityColours);
+            }
 
             // Hide the layers that would be drawn over the replacement art
             SetLayerHidden(player.hairSkin, hideHair);
@@ -90,6 +106,12 @@ namespace CustomPlayerSkin
         /// Not needed normally, since the RefreshCustomization patch applies it per player.
         /// </summary>
         public static void RefreshAllPlayers() => RebuildAllPlayers("再適用");
+
+        /// <summary>
+        /// A colour table that maps a colour onto itself, so the body layer's table changes nothing.
+        /// One entry on both sides: the counts have to match, or the game warns and ignores it.
+        /// </summary>
+        private static readonly List<Color> IdentityColours = new() { new Color(1f, 0f, 1f, 1f) };
 
         /// <summary>
         /// Stops replacing and returns every player to the game's own appearance.

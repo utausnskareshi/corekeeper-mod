@@ -258,6 +258,74 @@ public sealed class PixelOpsTests
     }
 
     [Fact]
+    public void ResizeExact_半透明になる縁でも透明の側の黒が混ざらない()
+    {
+        // 40 -> 7 puts a sample across the border, so that pixel comes out half transparent. The
+        // test above only looks at pixels that stay opaque, which a halving leaves on both sides.
+        // The copy said to premultiply first did not, and the border pixel came out (100,100,128)
+        // at alpha 128: half its colour taken by the transparent side's black.
+        using SKBitmap source = PixelOps.CreateEmpty(40, 1);
+        SKColor[] pixels = source.Pixels;
+        for (int x = 0; x < 20; x++)
+        {
+            pixels[x] = new SKColor(200, 200, 255, 255);
+        }
+
+        source.Pixels = pixels;
+
+        using SKBitmap result = PixelOps.ResizeExact(source, 7, 1, ResampleMode.Smooth);
+
+        SKColor[] edge = result.Pixels.Where(c => c.Alpha is > 16 and < 240).ToArray();
+        Assert.NotEmpty(edge);
+
+        foreach (SKColor color in result.Pixels.Where(c => c.Alpha > 16))
+        {
+            Assert.True(
+                Math.Abs(color.Red - 200) <= 12 && Math.Abs(color.Green - 200) <= 12 && color.Blue >= 240,
+                $"縁の色が黒に寄っている: {color}");
+        }
+    }
+
+    [Fact]
+    public void ResizeToFit_輪郭線の無い明るい絵を縮めて固めても縁が暗くならない()
+    {
+        // What a user gets with the defaults (Smooth, threshold 128, no outline): a pale figure
+        // with no dark outline shrunk into its box. Pixels on the edge that the threshold keeps
+        // came out darker than anything in the picture, a dark rim of odd pixels on the sheet.
+        SKColor skin = new(240, 220, 200, 255);
+        using SKBitmap source = PixelOps.CreateEmpty(200, 300);
+        SKColor[] pixels = source.Pixels;
+        for (int y = 0; y < 300; y++)
+        {
+            for (int x = 0; x < 200; x++)
+            {
+                double dx = (x + 0.5 - 100) / 100;
+                double dy = (y + 0.5 - 150) / 150;
+                if ((dx * dx) + (dy * dy) <= 1)
+                {
+                    pixels[(y * 200) + x] = skin;
+                }
+            }
+        }
+
+        source.Pixels = pixels;
+
+        using SKBitmap shrunk = PixelOps.ResizeToFit(source, 16, 19, ResampleMode.Smooth);
+        using SKBitmap hardened = PixelOps.HardenAlpha(shrunk, 128);
+
+        SKColor[] opaque = hardened.Pixels.Where(c => c.Alpha == 255).ToArray();
+        Assert.NotEmpty(opaque);
+
+        foreach (SKColor color in opaque)
+        {
+            Assert.True(
+                Math.Abs(color.Red - skin.Red) <= 8 && Math.Abs(color.Green - skin.Green) <= 8
+                    && Math.Abs(color.Blue - skin.Blue) <= 8,
+                $"縁の色が暗くなっている: {color}");
+        }
+    }
+
+    [Fact]
     public void ResizeToFit_サイズがゼロ以下なら例外にする()
     {
         using SKBitmap source = Solid(10, 10, SKColors.Blue);
@@ -370,6 +438,54 @@ public sealed class PixelOpsTests
 
         Assert.Equal(4, pixels.Count(p => p == SKColors.Black));
         Assert.Equal(1, pixels.Count(p => p == SKColors.White));
+    }
+
+    /// <summary>
+    /// Six flat colours in the standard character's proportions, each pixel nudged by at most 3 -
+    /// the "flat" colour an image generator gives. Every pixel has to stay close to its own colour.
+    ///
+    /// The cut was made at the median count. A colour covering much of the picture was then cut
+    /// again and again, while small ones were left in one box with their neighbours and averaged
+    /// together: skin came back as the shirt's white and the hair as the outline, in a sheet that
+    /// had been right before the reduction (the test campaign of 2026-09-30). The nudge is fixed
+    /// rather than random, so the test says the same thing on every run.
+    /// </summary>
+    [Theory]
+    [InlineData(6)]
+    [InlineData(16)]
+    public void Quantize_わずかな色むらがあっても別々の色を混ぜない(int colours)
+    {
+        (SKColor Colour, int Count)[] parts =
+        [
+            (new SKColor(245, 245, 245), 58), (new SKColor(34, 28, 40), 60), (new SKColor(240, 200, 160), 46),
+            (new SKColor(120, 72, 40), 31), (new SKColor(60, 90, 170), 9), (new SKColor(100, 60, 30), 8),
+        ];
+
+        List<SKColor> wobbled = [];
+        List<SKColor> flat = [];
+        int k = 0;
+        foreach ((SKColor colour, int count) in parts)
+        {
+            for (int n = 0; n < count; n++, k++)
+            {
+                int Wobble(int phase) => (((k * 5) + (phase * 3) + (k / 7)) % 7) - 3;
+                wobbled.Add(new SKColor(
+                    (byte)(colour.Red + Wobble(0)), (byte)(colour.Green + Wobble(1)), (byte)(colour.Blue + Wobble(2)), 255));
+                flat.Add(colour);
+            }
+        }
+
+        using SKBitmap source = PixelOps.CreateEmpty(wobbled.Count, 1);
+        source.Pixels = [.. wobbled];
+
+        using SKBitmap result = PixelOps.Quantize(source, colours);
+        SKColor[] pixels = result.Pixels;
+
+        int far = Enumerable.Range(0, pixels.Length).Count(i =>
+            Math.Max(Math.Max(Math.Abs(pixels[i].Red - flat[i].Red), Math.Abs(pixels[i].Green - flat[i].Green)),
+                Math.Abs(pixels[i].Blue - flat[i].Blue)) > 20);
+        Assert.True(far == 0, $"{far} / {pixels.Length} 画素が元の色から 20 を超えてずれた");
+        Assert.True(pixels.Select(p => (uint)p).Distinct().Count() <= colours, "指定した色数を超えた");
     }
 
     /// <summary>Builds a one-row image holding each colour the given number of times.</summary>

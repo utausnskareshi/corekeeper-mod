@@ -72,6 +72,28 @@ public sealed class HelpContentTests
     // hunting for a control that no longer exists.
     [InlineData("ja", "歩行に上下動を付ける")]
     [InlineData("en", "Add a bob to the walk cycle")]
+    // Statements the program does not bear out. Pictures turned 18 of the presets into front-facing
+    // art; the import settings do act on a preset shown after a picture was opened; the mod shows
+    // the replaced look only for your own character on your own screen; and the drawing goes
+    // unprotected after a single undone stroke, not only after Undo and Redo in a row.
+    [InlineData("ja", "最初から右向きに描かれている")]
+    [InlineData("en", "which are drawn facing right already")]
+    [InlineData("ja", "各パーツの位置と大きさは、ゲーム本来のキャラクターを実測した値に合わせてあります")]
+    [InlineData("en", "The position and size of every part matches measurements")]
+    [InlineData("ja", "これらの設定は使いません。変換の元になる画像が無いためです")]
+    [InlineData("en", "These settings do nothing while a preset is on screen, or while")]
+    [InlineData("ja", "参加者全員が同じ MOD と同じ画像を導入している必要があります")]
+    [InlineData("en", "everyone needs the same mod and the same image")]
+    [InlineData("ja", "「元に戻す」「やり直す」と続けて押すと、手描きが守られない状態になります")]
+    [InlineData("en", "and then pressing \"Undo\" and \"Redo\" in turn leaves your drawing unprotected")]
+    // Written before "Update mod" existed, when replacing an installed mod meant removing it first.
+    // Removing takes the settings folder with it, so following this deleted every character's
+    // picture, every captured look and the armour settings, for the same result "Update mod" gives.
+    [InlineData("ja", "「MOD を削除」で一度取り除いてから")]
+    [InlineData("en", "Press \"Remove mod\" in the status bar first")]
+    // The application's folder going takes its settings with it, not everything: the game's
+    // working copy of the mod and this application's unpacked parts stay in %TEMP%.
+    [InlineData("en", "so deleting it leaves nothing behind")]
     public void 廃止した文言がヘルプに残っていない(string language, string phrase)
     {
         Assert.DoesNotContain(phrase, AllText(language));
@@ -130,6 +152,77 @@ public sealed class HelpContentTests
     {
         // Asked about directly, and the answer is not obvious from the interface
         Assert.Contains(phrase, AllText(language));
+    }
+
+    [Theory]
+    [InlineData("ja", "動物に乗っている間も、ずっとこのコマが使われます")]
+    [InlineData("en", "the whole time you are riding an animal")]
+    public void 動物に乗っている間のコマを説明している(string language, string phrase)
+    {
+        // Measured on 1.3.0.3: riding an animal shows columns 7 to 9 of row 6 (sitting with the
+        // arms forward) the whole time. The grid section never said so, and those three cells are
+        // what the player looks at for as long as they ride.
+        Assert.Contains(phrase, AllText(language));
+    }
+
+    [Theory]
+    [InlineData("ja", "一覧で別の項目をいったん選んでから選び直してください")]
+    [InlineData("en", "choose a different entry in the list first")]
+    public void 置き換わったプリセットへの戻し方を書いている(string language, string phrase)
+    {
+        // The list keeps showing the last preset chosen after a conversion replaced it, and
+        // choosing the entry it already shows raises no change, so nothing loads. The help said the
+        // preset is replaced but not how to get it back (the test campaign of 2026-09-30).
+        Assert.Contains(phrase, AllText(language));
+    }
+
+    /// <summary>
+    /// The grid section tells the reader how many cells the sheet has, how many of them are
+    /// frames, and how many are left empty. All three follow from the layout, so a game update
+    /// that reshapes the sheet would leave the help stating numbers that no longer hold - and
+    /// the empty cells are exactly what readers ask about, so a wrong count is worse than none.
+    /// </summary>
+    [Theory]
+    [InlineData("ja")]
+    [InlineData("en")]
+    public void コマ割りの説明が実際のレイアウトと一致する(string language)
+    {
+        SheetLayout layout = SheetLayout.LoadEmbedded();
+
+        int cells = (layout.Texture.Width / layout.Cell.Width)
+            * (layout.Texture.Height / layout.Cell.Height);
+        int unused = cells - layout.FrameCount;
+
+        // Searched in the layout section alone, and with the words that go round each number.
+        // Against the whole help text the counts were found in sentences that have nothing to do
+        // with the grid - "39" appears five times in the Japanese file and "15" three, one of
+        // them inside the sheet's own size, 234x156 - so the section could have been deleted
+        // outright, or its numbers changed to 40 and 14, and this still passed. The empty cells
+        // are exactly what readers ask about, so a wrong count is worse than none.
+        HelpDocument document = HelpContent.Load(language);
+
+        HelpSection section = document.Sections.SingleOrDefault(
+            s => s.Heading.Contains("9×6", StringComparison.Ordinal)
+                 || s.Heading.Contains("9x6", StringComparison.Ordinal))
+            ?? throw new InvalidOperationException(
+                $"コマ割りの節が見つからない（{language}）: " +
+                string.Join(" / ", document.Sections.Select(s => s.Heading)));
+
+        string text = string.Join(
+            Environment.NewLine,
+            section.Paragraphs.Concat(section.Terms.Select(t => $"{t.Term} {t.Description}")));
+
+        Assert.Contains($"{cells}", text, StringComparison.Ordinal);
+
+        Assert.Contains(
+            language == "ja" ? $"使われるのは{layout.FrameCount}コマ" : $"only {layout.FrameCount} are used",
+            text,
+            StringComparison.Ordinal);
+
+        Assert.Contains(
+            language == "ja" ? $"残りの{unused}マス" : $"remaining {unused} are empty",
+            text,
+            StringComparison.Ordinal);
     }
 
     [Fact]

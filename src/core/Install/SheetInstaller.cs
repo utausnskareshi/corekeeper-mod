@@ -30,11 +30,25 @@ public static class SheetInstaller
     {
         using SKBitmap sheet = PixelOps.Decode(sheetPath, out bool complete);
 
+        // The file is copied into the game byte for byte as <guid>.png, and the game reads PNG only:
+        // its player has no WEBP or BMP decoder, and a JPEG carries no transparency. Such a file
+        // decodes here - SkiaSharp reads them all - so every check below passed, the character was
+        // reported as applied, and in the game it stayed as it was with a warning in the log.
+        if (!HasPngSignature(sheetPath))
+        {
+            throw new ToolException(
+                "error.sheet.notPng", [sheetPath],
+                $"シートが PNG 形式ではないため配置しない（ゲームは PNG しか正しく読めない）: {sheetPath}" +
+                Environment.NewLine + "  画像編集ソフトで PNG 形式で保存し直すこと。");
+        }
+
         // A file that stopped part-way through - a download cut short, a copy from a disconnected
         // drive - decodes into an image of the right size whose missing part is transparent. Both
         // checks below then pass, and the character goes into the game with its lower half gone.
-        // Nothing later can tell the difference, so it has to be refused here.
-        if (!complete)
+        // Nothing later can tell the difference, so it has to be refused here. A file missing only
+        // its last few bytes decodes whole, and the game still cannot read it; the message fits it
+        // as it stands, so the same key says it.
+        if (!complete || PngEndIsMissing(sheetPath))
         {
             throw new ToolException(
                 "error.sheet.truncated", [sheetPath],
@@ -59,5 +73,61 @@ public static class SheetInstaller
                 "error.sheet.transparent", [],
                 "シートが完全に透明なため配置しない。キャラクターが見えなくなる。");
         }
+    }
+
+    /// <summary>The eight bytes every PNG file starts with.</summary>
+    private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    /// <summary>
+    /// Whether a file is a PNG by its content, not its name: a picture saved as WEBP or JPEG and
+    /// then renamed .png is not one.
+    /// </summary>
+    public static bool HasPngSignature(string path)
+    {
+        using FileStream stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        Span<byte> head = stackalloc byte[8];
+        return stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false) == head.Length
+               && head.SequenceEqual(PngSignature);
+    }
+
+    /// <summary>IEND as every PNG ends: length 0, the type, and the CRC of that type.</summary>
+    private static readonly byte[] CanonicalIend = [0, 0, 0, 0, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82];
+
+    /// <summary>
+    /// Whether a PNG lacks its proper end: the chunks, walked from the signature, run out before an
+    /// IEND, or the IEND there is not the one every PNG carries.
+    ///
+    /// Checked apart from the decode, which cannot see it. SkiaSharp reports a PNG as whole once
+    /// the last row is out and reads nothing after, so a file missing its last twenty-odd bytes -
+    /// the end of the compressed data, its checksums and IEND - decodes with every pixel intact.
+    /// The game's Texture2D.LoadImage refuses such a file, and one whose IEND has a wrong CRC as
+    /// well (measured with the game's own UnityPlayer.dll on 1.3.0.3). Anything after IEND is not
+    /// looked at: the game reads those files. Only meant for a file with the PNG signature.
+    /// </summary>
+    public static bool PngEndIsMissing(string path)
+    {
+        byte[] data;
+        using (FileStream stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        {
+            data = new byte[stream.Length];
+            stream.ReadExactly(data);
+        }
+
+        // Every chunk is a 4-byte length, a 4-byte type, the data and a 4-byte CRC. Counted in
+        // long, so a corrupt length cannot wrap round to a position that looks valid.
+        long position = PngSignature.Length;
+        while (position + 12 <= data.Length)
+        {
+            ReadOnlySpan<byte> chunk = data.AsSpan((int)position);
+            if (chunk[4..8].SequenceEqual("IEND"u8))
+            {
+                return !chunk[..12].SequenceEqual(CanonicalIend);
+            }
+
+            long length = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(chunk);
+            position += 12 + length;
+        }
+
+        return true;
     }
 }

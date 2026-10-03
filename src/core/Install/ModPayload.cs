@@ -118,12 +118,29 @@ public static class ModPayload
                 "  Core Keeper のインストール先を確認すること。");
         }
 
-        string destination = PathSafety.EnsureInside(
-            modsDirectory, Path.Combine(modsDirectory, info.Name), "MOD の配置先");
+        string candidate = Path.Combine(modsDirectory, info.Name);
+
+        // A mod folder that is a link to somewhere outside the Mods folder is refused by the check
+        // below, and that stays as it is. But that check names the path before the link is
+        // followed, so its message showed the mod folder both as what was checked and as inside
+        // where it should be - with no key, so the English window showed it in Japanese - and said
+        // nothing of the link or what to do. Only the wording is decided here; the same cases fail.
+        if (!PathSafety.IsWithin(modsDirectory, candidate) && LinkTargetOf(candidate) is { } linkTarget)
+        {
+            throw new ToolException(
+                "error.payload.destinationIsLink", [candidate, linkTarget],
+                $"MOD の配置先がリンク（ジャンクション）になっていて、Mods フォルダの外を指している: {candidate}" + Environment.NewLine +
+                $"  リンク先: {linkTarget}" + Environment.NewLine +
+                "  このリンクだけをエクスプローラーで削除してから（リンク先のフォルダと中身は消えない）、もう一度実行すること。");
+        }
+
+        string destination = PathSafety.EnsureInside(modsDirectory, candidate, "MOD の配置先");
 
         // Extract into a sibling folder first and only swap it in once it is complete.
         // Deleting the old install up front would leave nothing usable behind if the
-        // extraction then failed, for example because the game is running and holds a file open.
+        // extraction then failed, for example because another program - Explorer, a terminal opened
+        // in that folder, an editor - holds a file in it open. Not the game: its loader reads every
+        // file whole and closes it again (measured on 1.3.0.2), so closing the game fixes nothing.
         string staging = destination + StagingSuffix;
         string backup = destination + BackupSuffix;
 
@@ -179,7 +196,8 @@ public static class ModPayload
                     "error.payload.leftoverLocked", [leftover, ex.Message],
                     $"前回の作業フォルダを削除できない: {leftover}" + Environment.NewLine +
                     $"  {ex.Message}" + Environment.NewLine +
-                    "  ゲームを終了し、このフォルダを手動で削除してから、もう一度実行すること。");
+                    "  このフォルダやその中のファイルを開いているプログラム（エクスプローラー・ターミナル・エディタなど）を閉じ、" +
+                    "このフォルダを手動で削除してから、もう一度実行すること。");
             }
         }
 
@@ -250,7 +268,8 @@ public static class ModPayload
                 leftInBackup ? "error.payload.swapFailedStranded" : "error.payload.swapFailed",
                 leftInBackup ? [ex.Message, backup] : [ex.Message],
                 $"MOD の差し替えに失敗した: {ex.Message}" + Environment.NewLine +
-                "  ゲームを終了してから、もう一度実行すること。" + stranded);
+                "  この MOD のフォルダやその中のファイルを開いているプログラム（エクスプローラー・ターミナル・エディタなど）を" +
+                "閉じてから、もう一度実行すること。" + stranded);
         }
 
         TryDelete(backup);
@@ -260,6 +279,35 @@ public static class ModPayload
     /// <summary>Whether a folder is absent, or present but holds nothing.</summary>
     private static bool IsMissingOrEmpty(string path) =>
         !Directory.Exists(path) || !Directory.EnumerateFileSystemEntries(path).Any();
+
+    /// <summary>
+    /// Whether a folder entry is a link (a junction or a symbolic link).
+    ///
+    /// Read from the entry itself, so a broken link counts too. Only name-surrogate reparse points
+    /// have a link target; other reparse points - a cloud placeholder, a deduplicated file - are
+    /// ordinary folders as far as this is concerned.
+    /// </summary>
+    private static bool IsLink(DirectoryInfo directory)
+    {
+        try
+        {
+            return directory.Attributes != (FileAttributes)(-1)
+                   && directory.Attributes.HasFlag(FileAttributes.ReparsePoint)
+                   && directory.LinkTarget is not null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                       or System.Security.SecurityException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Where a link points, as recorded in the link, or null when it is not one.</summary>
+    private static string? LinkTargetOf(string path)
+    {
+        DirectoryInfo directory = new(path);
+        return IsLink(directory) ? directory.LinkTarget : null;
+    }
 
     /// <summary>
     /// Deletes a working folder if present, ignoring failures. Used for .new and .old only.
@@ -274,6 +322,11 @@ public static class ModPayload
     /// Only ever called on a folder whose contents are already known to be disposable: the
     /// staging copy after a failed extraction, and the backup after the swap succeeded. The
     /// recovery path reads the backup before any of this runs.
+    ///
+    /// Except when the folder is a link. A mod folder that is a junction to a working copy is
+    /// moved aside as the link itself, so the "backup" holds the user's own folder, and deleting
+    /// the manifest through it deleted theirs. A link is left to the delete below, which removes
+    /// the link and never what it points at.
     /// </summary>
     internal static void TryDelete(string? path)
     {
@@ -284,7 +337,10 @@ public static class ModPayload
 
         try
         {
-            PathSafety.DeleteFile(Path.Combine(path, ManifestName));
+            if (!IsLink(new DirectoryInfo(path)))
+            {
+                PathSafety.DeleteFile(Path.Combine(path, ManifestName));
+            }
         }
         catch (Exception)
         {

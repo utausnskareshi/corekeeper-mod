@@ -12,8 +12,8 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
-  <!-- Matches LICENSE, which ships beside this executable. See the GUI project for why the
-       version is left alone. -->
+  <!-- Matches LICENSE, which ships beside this executable. The version is set once for every
+       project, in src/Directory.Build.props. -->
   <PropertyGroup>
     <Product>Core Keeper スキン作成ツール</Product>
     <AssemblyTitle>Core Keeper スキン作成ツール (コマンドライン)</AssemblyTitle>

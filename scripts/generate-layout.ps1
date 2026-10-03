@@ -155,8 +155,25 @@ for ($n = 0; $n -lt $frames.Count; $n++) {
 [void]$sb.AppendLine('}')
 
 New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
-# Write JSON as UTF-8 without BOM so that C# and Unity read it without special handling
-[System.IO.File]::WriteAllText($dst, $sb.ToString(), (New-Object System.Text.UTF8Encoding($false)))
+
+# Left alone when nothing but the verifiedVersions line differs. This script does not write that
+# line, and it records the builds the numbers were checked against: running it to check a new
+# game version, as data/supported-versions.json says to, used to wipe the record it was checking.
+# When the numbers do differ the file is rewritten as before - the old record no longer holds.
+$newText = $sb.ToString()
+$unchanged = $false
+if (Test-Path $dst) {
+    $oldText = [System.IO.File]::ReadAllText($dst, (New-Object System.Text.UTF8Encoding($false)))
+    $stripped = [regex]::Replace($oldText, '(?m)^[ \t]*"verifiedVersions":.*\r?\n', '')
+    $unchanged = ($stripped -ne $oldText) -and (($stripped -replace "`r`n", "`n") -eq ($newText -replace "`r`n", "`n"))
+}
+if ($unchanged) {
+    Write-Output "実測値は既存の定義と同じ。verifiedVersions を保つため書き換えない。確かめた版を verifiedVersions に足すこと。"
+}
+else {
+    # Write JSON as UTF-8 without BOM so that C# and Unity read it without special handling
+    [System.IO.File]::WriteAllText($dst, $newText, (New-Object System.Text.UTF8Encoding($false)))
+}
 
 # --- Validate the generated output ----------------------------------------------
 # Get-Content mistakes BOM-less UTF-8 for ANSI, so read it back as UTF-8 explicitly

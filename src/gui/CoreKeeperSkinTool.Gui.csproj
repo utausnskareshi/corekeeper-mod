@@ -19,9 +19,7 @@
     its company and its description, and carried no copyright at all - while LICENSE, sitting
     beside it in the same zip, names a person. The two have to agree.
 
-    Version is deliberately not set here. StartupGate.ApplicationVersion reads the assembly
-    version and records it when the terms are accepted, so changing it would ask everyone to
-    accept them again for no reason.
+    The version is set once for every project, in src/Directory.Build.props.
   -->
   <PropertyGroup>
     <Product>Core Keeper スキン作成ツール</Product>

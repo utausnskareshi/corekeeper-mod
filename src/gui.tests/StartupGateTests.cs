@@ -112,6 +112,21 @@ public sealed class StartupGateTests : IDisposable
     }
 
     [Fact]
+    public void Check_バージョン警告の対応版は照合と同じ粒度で示す()
+    {
+        // "1.3.0.1" in the list stands for every 1.3.0 build; shown as written it read as if
+        // 1.3.0.2 and 1.3.0.3 were outside the supported range
+        GamePathSettings.Save(CreateGame("future", "99.0.0-future"));
+
+        StartupNotice notice = Assert.Single(StartupGate.Check());
+
+        foreach (string supported in CoreKeeperSkinTool.Install.GameVersion.SupportedVersions)
+        {
+            Assert.Contains(CoreKeeperSkinTool.Install.GameVersion.MajorMinorPatch(supported) + ".x", notice.Message);
+        }
+    }
+
+    [Fact]
     public void Check_バージョンを読めない場合も警告にとどめる()
     {
         GamePathSettings.Save(CreateGame("unreadable", gameVersion: null));

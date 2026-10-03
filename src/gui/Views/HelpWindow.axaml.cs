@@ -79,11 +79,19 @@ public partial class HelpWindow : Window
         {
             timer.Stop();
 
-            // Only restore if nothing else has changed the label meanwhile
-            if (ReferenceEquals(button.Content, Loc.Instance["help.copied"])
-                || Equals(button.Content, Loc.Instance["help.copied"]))
+            // Caught and recorded: an exception escaping a timer's Tick reaches no handler
+            try
             {
-                button.Content = original;
+                // Only restore if nothing else has changed the label meanwhile
+                if (ReferenceEquals(button.Content, Loc.Instance["help.copied"])
+                    || Equals(button.Content, Loc.Instance["help.copied"]))
+                {
+                    button.Content = original;
+                }
+            }
+            catch (Exception ex)
+            {
+                Program.ReportHandled(ex);
             }
         };
         timer.Start();

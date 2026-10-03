@@ -49,8 +49,10 @@ namespace CustomPlayerSkin
         private const int Format = 1;
 
         /// <summary>
-        /// The bands, in the order the game draws them: earlier ones end up underneath. The tool
-        /// stacks them in this order, and both sides check the list against each other.
+        /// The bands, in the order they sit in the file, top to bottom. Both sides check the list
+        /// against each other. It is not the order the game draws them in: the tool stacks them in
+        /// the prefab's sorting order (CapturedSkins.DrawOrder), which puts the shirt over the
+        /// trousers and the helmet over the armour.
         /// </summary>
         private static readonly string[] LayerNames =
         {
@@ -312,6 +314,9 @@ namespace CustomPlayerSkin
                     // drawing as the body with every other band empty, and because the applier
                     // re-creates the entry immediately afterwards, nothing ever corrected it. The
                     // file then exists, so the fetch button reports success and hands that back.
+                    // Entries of characters still on screen are no longer dropped that way (see
+                    // ReloadChangedSkins), but any other rebuild that lands while the art is still
+                    // loading meets the same stale layers, so the gate stays.
                     bool known = NextAttempt.TryGetValue(guid, out float due);
                     if (!known || due <= now || due > now + RebuildGraceSeconds)
                     {
@@ -584,13 +589,20 @@ namespace CustomPlayerSkin
                 // the manifest, so a manifest with no image beside it reads as "nothing captured
                 // yet" - which is true - while an image with no manifest reads as a mod that needs
                 // updating, which is not. Of the two half-finished states, this is the honest one.
+                // A write that was refused - a read-only file - is refused again five seconds
+                // later, and nothing moved the next attempt on after a failure: every few seconds
+                // the layers were read back, encoded and written again, with a warning each time.
+                // So a failure waits as long as a settled capture does. A rebuild still pulls the
+                // next attempt in (RebuildGraceSeconds), so a change of look is not held back.
                 if (!WriteManifest())
                 {
+                    NextAttempt[guid] = Time.unscaledTime + SettledIntervalSeconds;
                     return;
                 }
 
                 if (!SkinStore.Write(CapturedDirectory + guid + ".png", png))
                 {
+                    NextAttempt[guid] = Time.unscaledTime + SettledIntervalSeconds;
                     return;
                 }
 
@@ -633,9 +645,13 @@ namespace CustomPlayerSkin
             // while it is actually being drawn.
             //
             // A base layer off means something is covering it: armour hides the shirt, a full helm
-            // hides the hair. The game loads that art all the same, and a picture of the character
-            // without their equipment - which the tool offers - is precisely the shirt underneath.
-            // So a base layer counts as soon as its art has loaded, on screen or not.
+            // hides the hair. The game does not keep that art underneath - it clears the layer it
+            // hides, and under a helm that shows part of the hair it loads the helm's own hair in
+            // place of the character's - so what is covered cannot be read back here, and the band
+            // stays empty or holds the helm's hair. Taking the equipment off in the game is the
+            // only way to capture what it covers; the tool's help says so. A base layer still
+            // counts as soon as its art has loaded, on screen or not, which keeps a layer whose
+            // renderer is off for any other reason.
             bool present = equipment ? drawn && loaded : loaded;
 
             // Drawn but not loaded means the art is still on its way. The band is left empty rather

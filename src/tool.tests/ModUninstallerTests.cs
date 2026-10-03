@@ -8,6 +8,7 @@ namespace CoreKeeperSkinTool.Tests;
 /// Deleting the wrong thing cannot be undone, so the focus is on removing only what is safe.
 /// The real game folder is never touched; the same structure is recreated in a temporary directory.
 /// </summary>
+[Collection(ChildProcessCollection.Name)]
 public sealed class ModUninstallerTests : IDisposable
 {
     private const string ModName = "CustomPlayerSkin";
@@ -230,8 +231,12 @@ public sealed class ModUninstallerTests : IDisposable
     }
 
     [Fact]
-    public void Execute_既に消えていても失敗として扱い他を止めない()
+    public void Execute_計画の後に消えていた対象は失敗に数えず他を止めない()
     {
+        // Counted as a failure until 2026-09-30, which made the window say "some could not be
+        // deleted: 既に存在しない" about a folder that was already in the state asked for - and the
+        // reason stayed in Japanese on an English screen. It is neither removed by this run nor a
+        // failure, so it is left out of both.
         string game = CreateGameInstall();
         string mods = CreateModConfig();
         RemovalPlan plan = ModUninstaller.Plan(ModName, [game], [mods]);
@@ -242,8 +247,25 @@ public sealed class ModUninstallerTests : IDisposable
         RemovalResult result = ModUninstaller.Execute(plan, ModName);
 
         Assert.Single(result.Removed);
-        Assert.Single(result.Failures);
+        Assert.Empty(result.Failures);
         Assert.False(Directory.Exists(Path.Combine(game, @"CoreKeeper_Data\StreamingAssets\Mods", ModName)));
+    }
+
+    [Fact]
+    public void Execute_すべて消えていれば削除も失敗も無い()
+    {
+        // The window then says "nothing to remove, already back to the original state"
+        string game = CreateGameInstall();
+        string mods = CreateModConfig();
+        RemovalPlan plan = ModUninstaller.Plan(ModName, [game], [mods]);
+
+        Directory.Delete(Path.Combine(mods, ModName), recursive: true);
+        Directory.Delete(Path.Combine(game, @"CoreKeeper_Data\StreamingAssets\Mods", ModName), recursive: true);
+
+        RemovalResult result = ModUninstaller.Execute(plan, ModName);
+
+        Assert.Empty(result.Removed);
+        Assert.Empty(result.Failures);
     }
 
     [Fact]
@@ -337,6 +359,169 @@ public sealed class ModUninstallerTests : IDisposable
             // a junction fails outright, which would turn every run of this test into a failure
             // in the tear-down. Deleting the junction itself leaves what it points at alone.
             Directory.Delete(link);
+        }
+    }
+
+    /// <summary>
+    /// A folder holding a junction goes in one call, and what the junction points at stays.
+    ///
+    /// .NET's recursive delete removes a junction inside as a link, but first tries
+    /// DeleteVolumeMountPoint on it, which an ordinary user is refused, and throws that refusal
+    /// once the link is already gone (.NET 9.0.4, Windows 11, not elevated): an
+    /// UnauthorizedAccessException, which the catch for IOException did not take. "Remove mod"
+    /// then reported "Access to the path 'skins' is denied." for a folder that was by then empty,
+    /// and left it there (the test campaign of 2026-09-30).
+    /// </summary>
+    [Fact]
+    public void DeleteDirectory_中に接合点があっても一度で消えリンク先は残る()
+    {
+        string folder = Path.Combine(_root, "config", "mods", ModName);
+        string far = Path.Combine(_root, "far");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(far);
+        File.WriteAllText(Path.Combine(folder, "General-hideHelm.json"), "{}");
+        File.WriteAllText(Path.Combine(far, "skin.png"), "png");
+        string link = Path.Combine(folder, "skins");
+        Assert.True(TryCreateJunction(link, far), "接合点を作成できなかった");
+
+        try
+        {
+            PathSafety.DeleteDirectory(folder);
+
+            Assert.False(Directory.Exists(folder), "フォルダが空のまま残っている");
+            Assert.True(File.Exists(Path.Combine(far, "skin.png")), "リンク先のファイルが消された");
+        }
+        finally
+        {
+            // Should the delete stop short, only the link is taken out, so Dispose can go on
+            if (Directory.Exists(link))
+            {
+                Directory.Delete(link);
+            }
+        }
+    }
+
+    [Fact]
+    public void Execute_設定フォルダの中の接合点は失敗にせずリンク先も残す()
+    {
+        // The case as "Remove mod" meets it: the pictures folder of the settings side kept in a
+        // synced folder and linked back in
+        string mods = CreateModConfig();
+        string folder = Path.Combine(mods, ModName);
+        string far = Path.Combine(_root, "sync", "skins");
+        Directory.CreateDirectory(far);
+        File.WriteAllText(Path.Combine(far, "72f9f8f64b557452fab4bd526350feab.png"), "png");
+        string link = Path.Combine(folder, "skins");
+        Assert.True(TryCreateJunction(link, far), "接合点を作成できなかった");
+
+        try
+        {
+            RemovalPlan plan = ModUninstaller.Plan(ModName, [], [mods]);
+            RemovalResult result = ModUninstaller.Execute(plan, ModName);
+
+            Assert.Empty(result.Failures);
+            Assert.Single(result.Removed);
+            Assert.False(Directory.Exists(folder), "設定フォルダが残っている");
+            Assert.True(File.Exists(Path.Combine(far, "72f9f8f64b557452fab4bd526350feab.png")), "リンク先の画像が消された");
+        }
+        finally
+        {
+            if (Directory.Exists(link))
+            {
+                Directory.Delete(link);
+            }
+        }
+    }
+
+    [Fact]
+    public void DeleteDirectory_開いているファイルがあれば今までどおり失敗しその名前を示す()
+    {
+        // The retry must not swallow a real failure: a file held open is still in the way the
+        // second time, and that is what the message names
+        string folder = Path.Combine(_root, "config", "mods", ModName);
+        Directory.CreateDirectory(folder);
+        string locked = Path.Combine(folder, "General-hideHelm.json");
+        File.WriteAllText(locked, "{}");
+
+        using (new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            IOException ex = Assert.Throws<IOException>(() => PathSafety.DeleteDirectory(folder));
+            Assert.Contains("General-hideHelm.json", ex.Message, StringComparison.Ordinal);
+        }
+
+        Assert.True(Directory.Exists(folder));
+    }
+
+    /// <summary>
+    /// One target that cannot be deleted does not stop the others. The test that went through this
+    /// at aa1990e was the one whose expectation changed with fix 15 (a target gone since the plan is
+    /// no longer a failure), which left nothing that fails a target and then goes on: stopping at
+    /// the first failure passed every test (the test campaign of 2026-10-01). Locked on each side in
+    /// turn, so whichever is handled first, the other comes after a failure.
+    /// </summary>
+    [Theory]
+    [InlineData(RemovalKind.ModConfig)]
+    [InlineData(RemovalKind.ModInstall)]
+    public void Execute_1件を消せなくても残りの対象は消す(RemovalKind lockedKind)
+    {
+        string game = CreateGameInstall();
+        string mods = CreateModConfig();
+
+        RemovalPlan plan = ModUninstaller.Plan(ModName, [game], [mods]);
+        Assert.Equal(2, plan.Targets.Count);
+
+        RemovalTarget locked = plan.Targets.Single(t => t.Kind == lockedKind);
+        RemovalTarget other = plan.Targets.Single(t => t.Kind != lockedKind);
+        string lockedFile = Directory.EnumerateFiles(locked.Path, "*", SearchOption.AllDirectories).First();
+
+        RemovalResult result;
+        using (new FileStream(lockedFile, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            result = ModUninstaller.Execute(plan, ModName);
+        }
+
+        (string Path, string Reason) failure = Assert.Single(result.Failures);
+        Assert.Equal(locked.Path, failure.Path);
+        Assert.Contains(Path.GetFileName(lockedFile), failure.Reason, StringComparison.Ordinal);
+
+        Assert.Equal(other.Path, Assert.Single(result.Removed));
+        Assert.False(Directory.Exists(other.Path), "失敗のあとの対象が消されていない");
+    }
+
+    [Theory]
+    [InlineData("General-hideHelm.json")]
+    [InlineData("zz-General-hideHelm.json")]
+    public void DeleteDirectory_接合点と開いているファイルがあれば開いているファイルを示す(string lockedName)
+    {
+        // With both, the first pass reported the link; what is really in the way is the open file.
+        // Named both sides of the link: .NET reports the first failure it meets, so a file listed
+        // before "skins" was named by the first pass anyway and proved nothing about the second.
+        string folder = Path.Combine(_root, "config", "mods", ModName);
+        string far = Path.Combine(_root, "far");
+        Directory.CreateDirectory(folder);
+        Directory.CreateDirectory(far);
+        File.WriteAllText(Path.Combine(far, "skin.png"), "png");
+        string link = Path.Combine(folder, "skins");
+        Assert.True(TryCreateJunction(link, far), "接合点を作成できなかった");
+        string locked = Path.Combine(folder, lockedName);
+        File.WriteAllText(locked, "{}");
+
+        try
+        {
+            using (new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                IOException ex = Assert.Throws<IOException>(() => PathSafety.DeleteDirectory(folder));
+                Assert.Contains(lockedName, ex.Message, StringComparison.Ordinal);
+            }
+
+            Assert.True(File.Exists(Path.Combine(far, "skin.png")), "リンク先のファイルが消された");
+        }
+        finally
+        {
+            if (Directory.Exists(link))
+            {
+                Directory.Delete(link);
+            }
         }
     }
 }

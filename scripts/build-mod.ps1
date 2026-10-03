@@ -85,7 +85,11 @@ $installPath = Join-Path $GamePath 'CoreKeeper_Data\StreamingAssets\Mods'
 # --- Check prerequisites --------------------------------------------------------
 if (-not (Test-Path $UnityPath)) { throw "Unity が見つからない: $UnityPath" }
 if (-not (Test-Path $sdkRoot)) { throw "ModSDK が見つからない: $sdkRoot" }
-if (-not (Test-Path $installPath)) { throw "Core Keeper が見つからない: $installPath" }
+# The game is looked for, not the Mods folder inside it: that folder only exists once a mod has
+# been installed, and the build creates it (CksBuildAutomation). Requiring it stopped a fresh
+# machine with "Core Keeper が見つからない" beside a game that was there all along.
+$streamingAssets = Split-Path $installPath -Parent
+if (-not (Test-Path $streamingAssets)) { throw "Core Keeper が見つからない: $streamingAssets" }
 
 $running = Get-Process -Name 'Unity' -ErrorAction SilentlyContinue
 if ($running) {

@@ -15,6 +15,7 @@ namespace CoreKeeperSkinTool.Tests;
 ///
 /// The real game folder is never touched; a temporary directory stands in for the destination.
 /// </summary>
+[Collection(ChildProcessCollection.Name)]
 public sealed class SheetInstallerTests : IDisposable
 {
     private static readonly SheetLayout Layout = SheetLayout.LoadEmbedded();
@@ -71,6 +72,30 @@ public sealed class SheetInstallerTests : IDisposable
     private string ModsDirectory => Path_("mods");
 
     private static string ModFolder => SheetInstaller.DefaultModFolderName;
+
+    /// <summary>
+    /// A sheet whose content is not PNG, whatever its name says. The picture is copied into the
+    /// game byte for byte as &lt;guid&gt;.png, and the game reads PNG only (its player has no WEBP or
+    /// BMP decoder, and a JPEG has no transparency), so the character stayed as it was with a
+    /// warning in the game's log - while this tool had said it was applied.
+    /// </summary>
+    [Theory]
+    [InlineData(SKEncodedImageFormat.Webp, "sheet.webp")]
+    [InlineData(SKEncodedImageFormat.Webp, "webp-renamed.png")]
+    [InlineData(SKEncodedImageFormat.Jpeg, "jpeg-renamed.png")]
+    public void Install_PNG以外の中身のシートは配置しない(SKEncodedImageFormat format, string name)
+    {
+        using SKBitmap bitmap = PixelOps.Decode(CreateValidSheet());
+        using SKData data = bitmap.Encode(format, 100);
+        string path = Path_(name);
+        File.WriteAllBytes(path, data.ToArray());
+
+        ToolException ex = Assert.Throws<ToolException>(
+            () => CharacterSkins.Install(path, Layout, ModsDirectory, ModFolder, [Guid1]));
+
+        Assert.Equal("error.sheet.notPng", ex.MessageKey);
+        Assert.False(File.Exists(CharacterSkins.PathFor(ModsDirectory, ModFolder, Guid1)));
+    }
 
     [Fact]
     public void Install_キャラクターの画像として配置される()
@@ -154,6 +179,82 @@ public sealed class SheetInstallerTests : IDisposable
 
         Assert.Equal("error.sheet.truncated", ex.MessageKey);
         Assert.False(Directory.Exists(Path.Combine(ModsDirectory, ModFolder)));
+    }
+
+    /// <summary>
+    /// The end of a PNG is checked as well as its pixels.
+    ///
+    /// SkiaSharp reports a complete decode once the last row is out and reads nothing after it, so a
+    /// file missing its last twenty-odd bytes - the end of the compressed data, its checksums and
+    /// the IEND chunk - decoded as whole and was installed. The game's Texture2D.LoadImage refuses
+    /// it, and refuses an IEND whose CRC is wrong too (measured with the game's own UnityPlayer.dll,
+    /// the test campaign of 2026-09-30), so the character stayed as it was.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]   // the middle of IEND's CRC
+    [InlineData(12)]  // IEND gone entirely
+    [InlineData(16)]  // IEND and the CRC of the last IDAT gone; the decode still succeeds
+    public void Install_末尾が欠けたシートは配置しない(int missing)
+    {
+        byte[] bytes = File.ReadAllBytes(CreateValidSheet("whole.png"));
+        string cut = Path_("tail-cut.png");
+        File.WriteAllBytes(cut, bytes[..^missing]);
+
+        using (PixelOps.Decode(cut, out bool complete))
+        {
+            // The premise: the decoder alone does not notice
+            Assert.True(complete || missing > 12, "前提が崩れた: 末尾だけ欠けたファイルを途中切れと判定した");
+        }
+
+        ToolException ex = Assert.Throws<ToolException>(
+            () => CharacterSkins.Install(cut, Layout, ModsDirectory, ModFolder, [Guid1]));
+
+        Assert.Equal("error.sheet.truncated", ex.MessageKey);
+        Assert.False(File.Exists(CharacterSkins.PathFor(ModsDirectory, ModFolder, Guid1)));
+    }
+
+    [Fact]
+    public void Install_IENDのCRCが壊れたシートは配置しない()
+    {
+        byte[] bytes = File.ReadAllBytes(CreateValidSheet("whole.png"));
+        bytes[^1] ^= 0xFF;
+        string bad = Path_("iend-crc.png");
+        File.WriteAllBytes(bad, bytes);
+
+        ToolException ex = Assert.Throws<ToolException>(
+            () => CharacterSkins.Install(bad, Layout, ModsDirectory, ModFolder, [Guid1]));
+
+        Assert.Equal("error.sheet.truncated", ex.MessageKey);
+    }
+
+    [Fact]
+    public void Install_IENDの後ろに余分なデータがあっても配置する()
+    {
+        // The game reads these, so they must go through: the chunks are walked only as far as IEND
+        byte[] bytes = File.ReadAllBytes(CreateValidSheet("whole.png"));
+        string padded = Path_("padded.png");
+        File.WriteAllBytes(padded, [.. bytes, .. Enumerable.Repeat((byte)0x41, 100)]);
+
+        CharacterSkins.Install(padded, Layout, ModsDirectory, ModFolder, [Guid1]);
+
+        Assert.True(File.Exists(CharacterSkins.PathFor(ModsDirectory, ModFolder, Guid1)));
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A })]  // the signature and nothing else
+    [InlineData(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0xFF, 0xFF, 0xFF, 0xFF, 0x49, 0x48, 0x44, 0x52 })]  // a length past the end
+    public void 末尾の検査はチャンクの長さが壊れていても例外を投げず欠けていると答える(byte[] content)
+    {
+        string path = Path_("broken-chunks.png");
+        File.WriteAllBytes(path, content);
+
+        Assert.True(SheetInstaller.PngEndIsMissing(path));
+    }
+
+    [Fact]
+    public void 末尾の検査は正しく保存したPNGを通す()
+    {
+        Assert.False(SheetInstaller.PngEndIsMissing(CreateValidSheet("whole.png")));
     }
 
     [Fact]

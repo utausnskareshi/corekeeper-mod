@@ -139,7 +139,11 @@ public static class ModUninstaller
     /// Executes the plan.
     ///
     /// The settings side, holding the image, is removed first. A running game then
-    /// notices and restores the original look, so the screen updates immediately.
+    /// notices within its reload interval and restores the original look. That holds for the
+    /// mod as built since 2026-09-27: the game reads a setting whose file is gone as 0 rather
+    /// than as its registered default (measured on 1.3.0.2), removing the settings side takes
+    /// every setting with it, and an earlier mod therefore read its reload interval as "off"
+    /// and kept the removed look until the game was restarted.
     /// </summary>
     public static RemovalResult Execute(RemovalPlan plan, string modFolderName)
     {
@@ -154,6 +158,14 @@ public static class ModUninstaller
 
         foreach (RemovalTarget target in ordered)
         {
+            // Gone since the plan was made - removed from another window or in Explorer - is the
+            // state asked for. Reporting it as "could not be deleted" said the opposite, and in
+            // Japanese on an English screen, so it counts as neither removed nor failed.
+            if (!Directory.Exists(target.Path))
+            {
+                continue;
+            }
+
             if (!IsSafeToRemove(target.Path, modFolderName, out string reason))
             {
                 failures.Add((target.Path, reason));

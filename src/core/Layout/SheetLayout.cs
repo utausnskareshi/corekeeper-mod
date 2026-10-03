@@ -46,6 +46,27 @@ public sealed record SheetLayout(
     IReadOnlyDictionary<string, int[]> Animations,
     IReadOnlyList<FrameRect> Frames)
 {
+    /// <summary>
+    /// Every game build these numbers have been checked against, newest last. Written as a
+    /// property rather than a constructor parameter so that a definition from before this
+    /// field existed still loads; <see cref="VerifiedOn"/> is what to read.
+    ///
+    /// One set of measurements can be right for several builds - 1.3.0.1 left the sheet and
+    /// every part rectangle exactly as 1.2.1 had them - and re-stamping the file with only the
+    /// newest build would drop a version that was genuinely checked.
+    /// </summary>
+    public IReadOnlyList<string> VerifiedVersions { get; init; } = [];
+
+    /// <summary>
+    /// The builds these numbers hold for. Falls back to the build they were measured on, which
+    /// is what a definition written before <see cref="VerifiedVersions"/> existed says.
+    /// </summary>
+    public IReadOnlyList<string> VerifiedOn =>
+        // A file saying "verifiedVersions": null arrives with the list null even though the
+        // property is not nullable, and "cks layout" then ended in NullReferenceException. Read
+        // like a file without the key, which every other command already did without complaint.
+        VerifiedVersions is { Count: > 0 } ? VerifiedVersions : [GameVersion];
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -69,7 +90,10 @@ public sealed record SheetLayout(
         Texture is not null && width == Texture.Width && height == Texture.Height;
 
     /// <summary>
-    /// Whether anything is drawn outside the frames, which a sheet this program made never has.
+    /// Whether anything is drawn outside the frames, which a sheet this program converted never
+    /// has. Marks drawn by hand in the unused cells are the exception: the editor shows those cells,
+    /// lets them be drawn in and saves them, so the question this answers can come up for one of
+    /// this program's own sheets too, and its wording says so.
     ///
     /// Thirty-nine frames sit on a nine-by-six grid, so fifteen cells and the space around them
     /// belong to no frame and stay empty. A picture of the sheet's size that does use them is
@@ -116,6 +140,69 @@ public sealed record SheetLayout(
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// How many opaque pixels each facing's frames hold, keyed by <see cref="FrameRect.Dir"/>.
+    ///
+    /// The sheet holds three facings - down, right and up - and the game draws the fourth by
+    /// mirroring the right one. A check over the whole sheet cannot tell "every facing is there"
+    /// from "one facing is there and two are blank", and the second of those is a character who
+    /// disappears whenever they turn: the frames exist, they are simply empty. Counting by facing
+    /// is what makes the difference visible, and <c>cks validate</c> has always reported it after
+    /// the fact ("26 コマが完全に空") from a scan of exactly this shape.
+    ///
+    /// Every facing named in the layout appears in the result, at zero if nothing was drawn for
+    /// it, so a caller can tell an empty facing from one this layout does not have.
+    /// </summary>
+    /// <param name="alphaAt">Alpha of the pixel at the given sheet coordinates.</param>
+    public Dictionary<string, int> OpaqueByDirection(Func<int, int, byte> alphaAt)
+    {
+        ArgumentNullException.ThrowIfNull(alphaAt);
+
+        Dictionary<string, int> opaque = new(StringComparer.Ordinal);
+
+        foreach (FrameRect frame in Frames)
+        {
+            // Dir is free-form and nothing validates it - Validate checks indices, sizes and
+            // overlap and never looks at it - so a layout handed to --layout that leaves "dir"
+            // out arrives with null here, and a null key is what Dictionary refuses. Measured:
+            // the embedded layout with every "dir" stripped ended the run with
+            // "Value cannot be null. (Parameter 'key')" instead of building the sheet.
+            //
+            // Such frames are drawn from the front picture, by the same fall-through that takes
+            // any unrecognised direction, but there is no name to report them under - so they are
+            // left out of the tally rather than counted as a facing. A layout that names no
+            // directions at all therefore produces no entries, and a caller asking which facing
+            // is empty is told none of them is, which is how it behaved before this existed.
+            if (string.IsNullOrEmpty(frame.Dir))
+            {
+                continue;
+            }
+
+            if (!opaque.ContainsKey(frame.Dir))
+            {
+                opaque[frame.Dir] = 0;
+            }
+
+            // Clamped to the texture the same way PaintedOutsideFrames clamps, so a layout whose
+            // frames reach past the sheet cannot turn a count into an index out of range.
+            int endY = Texture is null ? frame.YTopLeft + frame.H : Math.Min(frame.YTopLeft + frame.H, Texture.Height);
+            int endX = Texture is null ? frame.X + frame.W : Math.Min(frame.X + frame.W, Texture.Width);
+
+            for (int y = frame.YTopLeft; y < endY; y++)
+            {
+                for (int x = frame.X; x < endX; x++)
+                {
+                    if (alphaAt(x, y) != 0)
+                    {
+                        opaque[frame.Dir]++;
+                    }
+                }
+            }
+        }
+
+        return opaque;
     }
 
     /// <summary>Loads the default layout definition embedded in the executable.</summary>
@@ -205,8 +292,21 @@ public sealed record SheetLayout(
 
             HashSet<int> seenIndices = [];
             List<FrameRect> placed = [];
+            int position = 0;
             foreach (FrameRect frame in Frames)
             {
+                // A trailing comma or a deleted entry in a hand-edited file leaves a null in the
+                // array. Reading Index from it ended the run with exit code 2 and a stack trace.
+                // Named by its place in the array, as a JSON path would name it.
+                if (frame is null)
+                {
+                    errors.Add($"frames[{position}] が null");
+                    position++;
+                    continue;
+                }
+
+                position++;
+
                 if (!seenIndices.Add(frame.Index))
                 {
                     errors.Add($"index {frame.Index} が重複している");
@@ -317,7 +417,7 @@ public sealed record SheetLayout(
         // indexes past the end of the frame list.
         if (Animations is not null && Frames is not null)
         {
-            HashSet<int> definedIndices = [.. Frames.Select(f => f.Index)];
+            HashSet<int> definedIndices = [.. Frames.Where(f => f is not null).Select(f => f.Index)];
             foreach (KeyValuePair<string, int[]> animation in Animations)
             {
                 if (animation.Value is null || animation.Value.Length == 0)

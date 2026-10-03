@@ -151,6 +151,18 @@ public sealed class EditorDocument
     /// <summary>Whether anything was edited since import, deciding if a settings change may discard it.</summary>
     public bool IsModified { get; private set; }
 
+    /// <summary>
+    /// A count that moves on every change of the contents: strokes, fills, colour replacements,
+    /// whole-sheet replacements, undo and redo.
+    ///
+    /// <see cref="IsModified"/> only says whether the sheet differs from the one imported, so more
+    /// drawing on a sheet that was already edited does not show in it. The window takes this count
+    /// when the user agrees to lose the drawing and compares it when a conversion or load lands, so
+    /// that what was drawn in between is not thrown away with the rest. Read only: neither the undo
+    /// history nor <see cref="IsModified"/> depends on it.
+    /// </summary>
+    public long Revision { get; private set; }
+
     public bool CanUndo => _undo.Count > 0;
 
     public bool CanRedo => _redo.Count > 0;
@@ -264,6 +276,9 @@ public sealed class EditorDocument
         }
 
         IsModified = true;
+
+        // Every write that actually changes a pixel comes through here (SetPixel calls it)
+        Revision++;
     }
 
     public bool Undo()
@@ -276,6 +291,9 @@ public sealed class EditorDocument
         _redo.Add((SKColor[])_pixels.Clone());
         _pixels = _undo[^1];
         _undo.RemoveAt(_undo.Count - 1);
+
+        // The whole array is swapped, which does not go through SetPixel, but the contents change
+        Revision++;
 
         // Whatever is on top now was not put there by the replacement that has just been undone,
         // so the next replacement must not fold into it.
@@ -298,6 +316,10 @@ public sealed class EditorDocument
         _undo.Add((SKColor[])_pixels.Clone());
         _pixels = _redo[^1];
         _redo.RemoveAt(_redo.Count - 1);
+
+        // As for undo
+        Revision++;
+
         _topOfHistoryIsReplacement = false;
         EndChange();
         RefreshModified();
@@ -425,6 +447,18 @@ public sealed class EditorDocument
 
         SKColor[] source = sheet.Pixels;
 
+        // A replacement neither makes hand-made work nor destroys it: it moves whatever was on
+        // the sheet onto the history, one undo away. So whether there is work to lose is the
+        // same afterwards as before, and it must not be decided again from the contents.
+        //
+        // Deciding it from the contents is right for a stroke - painting a pixel and erasing it
+        // by hand really does leave nothing - but wrong here. Trying one preset and coming back
+        // to the one that was open leaves the sheet matching what was opened while the drawing
+        // sits on the history, and the flag went false. The window reads it as "would going on
+        // lose the user's work", so the next preset built a new document and closing asked
+        // nothing, and either way took the history and the drawing with it.
+        bool hadWorkToLose = IsModified;
+
         if (foldIntoPrevious && _topOfHistoryIsReplacement && _undo.Count > 0)
         {
             // Written with the stroke already marked as recorded, so the writes below find
@@ -440,11 +474,9 @@ public sealed class EditorDocument
 
             _strokeRecorded = false;
 
-            // Both of these are what RecordChange would have done. The redo history described a
-            // future that this replacement has just replaced, and whether the document still
-            // differs from the imported sheet has to be decided again from its contents.
+            // What RecordChange would have done: the redo history described a future that this
+            // replacement has just replaced.
             _redo.Clear();
-            RefreshModified();
         }
         else
         {
@@ -457,6 +489,10 @@ public sealed class EditorDocument
 
             EndChange();
         }
+
+        // Both branches can move the flag - a changed pixel sets it through RecordChange, and
+        // EndChange decides it again from the contents - so it is put back afterwards.
+        IsModified = hadWorkToLose;
 
         _topOfHistoryIsReplacement = true;
     }
@@ -772,12 +808,28 @@ public sealed class EditorDocument
     /// did not. Clicking inside an area already that colour is an ordinary mistake, and reporting
     /// nothing left whatever the last action had said on screen, which reads as if it worked.
     /// </returns>
-    public int Fill(int x, int y, SKColor color, EditScope scope)
+    public int Fill(int x, int y, SKColor color, EditScope scope) => Fill(x, y, color, scope, out _);
+
+    /// <param name="skippedFrames">
+    /// Frames left alone because the same position held a different colour from the one clicked.
+    ///
+    /// Each frame's fill used to start from whatever colour sat there. The frames facing right or
+    /// away, sitting or swinging, hold different art, so the spot can be another part or the
+    /// transparent background: filling the shoes in the front frame flooded the whole background
+    /// of the sitting frames - out of sight, with one frame on screen - and the game showed a
+    /// square where the character sat. A frame only takes part when it has the clicked colour at
+    /// that spot, and the count lets the caller say how many did not.
+    /// </param>
+    public int Fill(int x, int y, SKColor color, EditScope scope, out int skippedFrames)
     {
+        skippedFrames = 0;
+
         if (!InBounds(x, y) || !TryGetFrameAt(x, y, out FrameRect frame))
         {
             return 0;
         }
+
+        SKColor clicked = _pixels[(y * Width) + x];
 
         // Normalised the same way SetPixel normalises, so that filling an area that was
         // erased earlier is recognised as a no-op instead of repainting invisible pixels.
@@ -797,8 +849,18 @@ public sealed class EditorDocument
             // Frames may differ in size, so the position can fall outside a smaller one
             if (cellX < destination.W && cellY < destination.H)
             {
-                changed += FillWithinFrame(
-                    destination, destination.X + cellX, destination.YTopLeft + cellY, color);
+                int startX = destination.X + cellX;
+                int startY = destination.YTopLeft + cellY;
+
+                if (destination.Index != frame.Index
+                    && InBounds(startX, startY)
+                    && _pixels[(startY * Width) + startX] != clicked)
+                {
+                    skippedFrames++;
+                    continue;
+                }
+
+                changed += FillWithinFrame(destination, startX, startY, color);
             }
         }
 
@@ -853,7 +915,10 @@ public sealed class EditorDocument
                     continue;
                 }
 
-                if (!visited.Add((nx, ny)) || _pixels[(ny * Width) + nx] != target)
+                // The colour first: a neighbour of another colour is not visited at all. Added
+                // before the test, every pixel bordering the area was counted as changed, and the
+                // count below was the area plus its rim.
+                if (_pixels[(ny * Width) + nx] != target || !visited.Add((nx, ny)))
                 {
                     continue;
                 }

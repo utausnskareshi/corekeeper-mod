@@ -1,6 +1,6 @@
 ﻿===============================================================================
- Core Keeper スキン作成ツール
- Core Keeper Skin Maker
+ Core Keeper スキン作成ツール v1.3.0
+ Core Keeper Skin Maker v1.3.0
 ===============================================================================
 
 Core Keeper の操作キャラクターの見た目を、好きな画像に差し替えるツールです。
@@ -51,11 +51,17 @@ only proceed by accepting it.
   ・Windows 10 / 11 (64bit)
   ・Steam 版 Core Keeper がインストール済みであること
 
+Core Keeper 1.3.0.4-511d で動作を確認しています。このツールの版の番号は、
+対応する Core Keeper の版に合わせています（v1.3.0 は Core Keeper 1.3.0 系用）。
+
 .NET や Unity、Visual Studio などをインストールする必要はありません。
 必要なものはすべてこのフォルダに入っています。
 
   - Windows 10 / 11 (64-bit)
   - Core Keeper installed through Steam
+
+Checked with Core Keeper 1.3.0.4-511d. The version number of this tool follows
+the Core Keeper version it is made for (v1.3.0 is for Core Keeper 1.3.0.x).
 
 No .NET, Unity or Visual Studio installation is required. Everything needed is
 contained in this folder.
@@ -215,9 +221,16 @@ Keeper is installed - the folder that contains CoreKeeper.exe.
   3. このフォルダごと削除します
 
 設定はこのフォルダの中だけに保存されます（portable.txt があるため）。
-上の1と2を済ませてからこのフォルダを消せば、パソコンには何も残りません。MOD 本体は
-ゲームのフォルダ側にあるため、1と2を飛ばしてこのフォルダだけ消すと、ゲームに MOD が
-残ったうえ、アプリから削除する手段も無くなります。
+上の1と2を済ませてからこのフォルダを消せば、このアプリと MOD が保存したものは何も
+残りません。MOD 本体はゲームのフォルダ側にあるため、1と2を飛ばしてこのフォルダだけ
+消すと、ゲームに MOD が残ったうえ、アプリから削除する手段も無くなります。
+
+ただし Windows の一時フォルダ（%TEMP%）には、ゲームが MOD を読み込むときに作る
+作業用の写し（Pugstorm\Core Keeper\ModLoader\CustomPlayerSkin）と、このアプリが
+起動するときに展開する部品（.net\cks-gui と .net\cks）が残ります。どちらも一時
+ファイルなので、消しても問題ありません。
+また、アプリのフォルダ（このフォルダ）に書き込めない状態でエラーが起きると、
+その記録（cks-gui-error.log）も %TEMP% に書きます。これも消して構いません。
 
   1. "Remove from game" at the bottom right restores the original appearance of
      the ticked characters. Tick at least one, or the button stays disabled
@@ -225,9 +238,16 @@ Keeper is installed - the folder that contains CoreKeeper.exe.
   3. Delete this folder
 
 Settings are kept inside this folder only (that is what portable.txt does), so
-once steps 1 and 2 are done, deleting the folder leaves nothing behind. The mod
-itself lives in the game folder, so deleting this folder alone would leave it
-there with no way left to remove it.
+once steps 1 and 2 are done, deleting the folder leaves nothing this application
+or the mod saved. The mod itself lives in the game folder, so deleting this
+folder alone would leave it there with no way left to remove it.
+
+Windows' temporary folder (%TEMP%) does keep two things, though: the working
+copy the game makes when it loads the mod (Pugstorm\Core Keeper\ModLoader\
+CustomPlayerSkin), and the parts this application unpacks when it starts
+(.net\cks-gui and .net\cks). Both are temporary files and safe to delete.
+If an error occurs while this application's folder cannot be written to, its
+record (cks-gui-error.log) goes to %TEMP% as well; that is safe to delete too.
 
 
 -------------------------------------------------------------------------------

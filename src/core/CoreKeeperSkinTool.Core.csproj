@@ -40,8 +40,18 @@
     -->
     <EmbeddedResource Include="..\..\data\player-parts.json" LogicalName="player-parts.json" />
 
-    <!-- Preset characters: colours and shape choices only, drawn at run time -->
+    <!-- Preset characters: colours and shape choices drawn at run time, or the name of a picture below -->
     <EmbeddedResource Include="..\..\data\presets.json" LogicalName="presets.json" />
+
+    <!--
+      Pictures for the presets whose costume has a shape of its own. Kept as they came out of
+      cleaning rather than reduced to the thirteen pixels the game shows: placement resamples
+      once from this, and what is stored is then the source, not an intermediate.
+      Named by the wildcard so adding a preset picture is one file and one line of JSON.
+    -->
+    <EmbeddedResource Include="..\..\data\preset-art\*.png">
+      <LogicalName>preset-art/%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
 
     <!-- Which Core Keeper versions this build has been checked against -->
     <EmbeddedResource Include="..\..\data\supported-versions.json" LogicalName="supported-versions.json" />

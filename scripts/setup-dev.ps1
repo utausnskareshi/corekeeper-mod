@@ -63,13 +63,24 @@ $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
 $dotnetOk = $false
 if ($dotnet) {
     $sdks = & dotnet --list-sdks 2>$null
-    $dotnetOk = @($sdks | Where-Object { $_ -match '^9\.' }).Count -gt 0
+    $runtimes = & dotnet --list-runtimes 2>$null
+    # An SDK of 9.0.300 or later - a later major counts too - not just any 9: Avalonia's source
+    # generator references Roslyn 4.14, which the 9.0.1xx and 9.0.2xx SDKs do not have. With one of
+    # those the GUI fails to build (CS9057, then CS0103 for InitializeComponent) although this check
+    # used to say OK. The tests target net9.0, so the .NET 9 runtime has to be there as well, which
+    # an SDK of a later major does not bring with it.
+    $sdkOk = @($sdks | Where-Object {
+            $_ -match '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)' -and
+            [version]"$($Matches['major']).$($Matches['minor']).$($Matches['patch'])" -ge [version]'9.0.300'
+        }).Count -gt 0
+    $runtimeOk = @($runtimes | Where-Object { $_ -match '^Microsoft\.NETCore\.App 9\.' }).Count -gt 0
+    $dotnetOk = $sdkOk -and $runtimeOk
 }
 if ($dotnetOk) {
-    Write-Output '  [OK]   .NET SDK 9'
+    Write-Output '  [OK]   .NET SDK (9.0.300 以降) と .NET 9 ランタイム'
 }
 else {
-    Write-Output '  [不足] .NET SDK 9  … ツールと GUI のビルドに必要'
+    Write-Output '  [不足] .NET SDK 9 (9.0.300 以降)  … ツールと GUI のビルドに必要'
     $missing += 'dotnet'
 }
 

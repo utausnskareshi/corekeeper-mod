@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.RegularExpressions;
 using CoreKeeperSkinTool.Gui.Localization;
+using CoreKeeperSkinTool.Gui.ViewModels;
 
 namespace CoreKeeperSkinTool.Gui.Tests;
 
@@ -162,5 +163,30 @@ public sealed class LanguageSwitchTests : IDisposable
 
         string[] untranslated = [.. keys.Where(key => Loc.Instance[key] == key)];
         Assert.True(untranslated.Length == 0, "訳が無いキー: " + string.Join(", ", untranslated));
+    }
+
+    /// <summary>
+    /// The tool's version follows the game's (1.3.0 for Core Keeper 1.3.0.x, the user's decision of
+    /// 2026-10-02), and the window said nowhere which one was running: the number was in the file's
+    /// properties and nowhere a user looks. The title carries it, in the language of the moment.
+    /// </summary>
+    [Fact]
+    public void 窓の題名に版を出し言語の切り替えに従う()
+    {
+        Assert.Matches(@"^\d+\.\d+\.\d+$", MainViewModel.ProductVersion);
+        Assert.Equal(
+            typeof(MainViewModel).Assembly.GetName().Version!.ToString(3),
+            MainViewModel.ProductVersion);
+
+        string window = File.ReadAllText(Path.Combine(
+            TranslationCoverageTests.FindRepositoryRoot(), "src", "gui", "Views", "MainWindow.axaml"));
+        Assert.Contains("Title=\"{Binding WindowTitle}\"", window, StringComparison.Ordinal);
+
+        string model = LanguageNotificationTests.ViewModelClass(LanguageNotificationTests.ViewModelSource());
+        Assert.Matches(@"WindowTitle\s*=>\s*\$""\{Loc\.Instance\[""app\.title""\]\} v\{ProductVersion\}"";", model);
+        Assert.Contains(
+            "OnPropertyChanged(nameof(WindowTitle));",
+            LanguageNotificationTests.MethodBody(model, "private void OnLanguageChanged()"),
+            StringComparison.Ordinal);
     }
 }

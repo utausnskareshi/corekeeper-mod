@@ -23,6 +23,26 @@ public static class PresetCharacter
         Build(layout, parts, preset, sideViewEnabled: true);
 
     /// <summary>
+    /// Builds the sheet from a picture rather than from a recipe.
+    ///
+    /// Goes through the whole of <see cref="SkinPipeline"/> rather than straight to the
+    /// composer, with the settings left at their defaults - which are the ones <c>generate</c>
+    /// uses. A preset and that same file handed to the command line therefore come out the
+    /// same sheet, and the steps between matter: margins are trimmed at the alpha the sheet
+    /// will end up with, so a soft fringe cannot leave the character floating above the foot
+    /// line, and the half-transparent edge a generated picture arrives with is hardened, which
+    /// is what <c>validate</c> asks of any sheet going into the game.
+    /// </summary>
+    private static SKBitmap Place(SheetLayout layout, string image)
+    {
+        using SKBitmap art = PresetArt.Load(image);
+
+        SkinOptions options = new SkinOptions().WithDefaultsFrom(layout);
+
+        return SkinPipeline.Build(art, layout, options).Sheet;
+    }
+
+    /// <summary>
     /// Builds the sheet with the side-view cues optionally suppressed.
     ///
     /// Suppressing them is only useful to a test: it is the only way to measure what the side
@@ -36,6 +56,13 @@ public static class PresetCharacter
         ArgumentNullException.ThrowIfNull(layout);
         ArgumentNullException.ThrowIfNull(parts);
         ArgumentNullException.ThrowIfNull(preset);
+
+        if (!preset.IsDrawn)
+        {
+            // parts is not passed on: the pipeline loads the measurements itself, and checks
+            // them against the layout while it is there.
+            return Place(layout, preset.Image!);
+        }
 
         SKBitmap sheet = PixelOps.CreateEmpty(layout.Texture.Width, layout.Texture.Height);
         SKColor[] canvas = sheet.Pixels;

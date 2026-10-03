@@ -48,12 +48,35 @@ public static class GameLocator
             return [];
         }
 
-        List<UserDataDirectory> found = [];
+        return FindUserDataDirectories(gameRoot);
+    }
 
-        // The layout is <game>\<platform>\<user id>
+    /// <summary>The per-user data folders under one data root. Split out so the rules can be tested on a folder of their own.</summary>
+    internal static IReadOnlyList<UserDataDirectory> FindUserDataDirectories(string gameRoot)
+    {
+        List<UserDataDirectory> found = [];
+        Exception? firstFailure = null;
+
+        // The layout is <game>\<platform>\<user id>. The game keeps folders of its own beside the
+        // platforms - Sentry and SentryNative on the machine measured - and they are walked too;
+        // they hold no saves or mods, so nothing below ever picks them.
         foreach (string platformDirectory in Directory.EnumerateDirectories(gameRoot))
         {
-            foreach (string userDirectory in Directory.EnumerateDirectories(platformDirectory))
+            string[] users;
+            try
+            {
+                users = Directory.GetDirectories(platformDirectory);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                           or System.Security.SecurityException)
+            {
+                // One folder that cannot be listed - a broken junction, one that denies access -
+                // used to throw out of the whole search, and every character with it
+                firstFailure ??= ex;
+                continue;
+            }
+
+            foreach (string userDirectory in users)
             {
                 found.Add(new UserDataDirectory(
                     userDirectory,
@@ -62,11 +85,21 @@ public static class GameLocator
             }
         }
 
+        // The folder skipped may be the account itself. When nothing readable has saves or mods,
+        // the failure is the real answer: returning nothing instead told a player whose data is
+        // there but unreadable to "start the game once and it will be created".
+        if (firstFailure is not null
+            && !found.Any(u => Directory.Exists(Path.Combine(u.Directory, "saves"))
+                               || Directory.Exists(Path.Combine(u.Directory, "mods"))))
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(firstFailure);
+        }
+
         return found;
     }
 
     /// <summary>
-    /// Returns candidate mod settings folders, most recently modified first, or empty when none exist.
+    /// Returns candidate mod settings folders, the one the game started with last first, or empty when none exist.
     /// </summary>
     public static IReadOnlyList<ModConfigLocation> FindModConfigLocations()
     {
@@ -81,7 +114,29 @@ public static class GameLocator
             }
         }
 
-        return [.. found.OrderByDescending(x => Directory.GetLastWriteTimeUtc(x.ModsDirectory))];
+        return MostRecentlyUsedFirst(found);
+    }
+
+    /// <summary>
+    /// Orders candidate settings folders, the one the game used last first.
+    ///
+    /// Keyed on modsREADME.txt, which the game rewrites every time it starts (Manager.EarlyInit,
+    /// measured on 1.3.0.2) and this tool never touches. The folder's own time was used before, but
+    /// it moves whenever anything directly inside it is created or removed - this tool placing or
+    /// removing CustomPlayerSkin included - so the account the tool had just written to came first,
+    /// and after "Remove mod" that was the account the player does not play on. A folder without
+    /// README.txt keeps the old key.
+    /// </summary>
+    internal static IReadOnlyList<ModConfigLocation> MostRecentlyUsedFirst(IEnumerable<ModConfigLocation> found) =>
+        [.. found.OrderByDescending(x => LastUsedUtc(x.ModsDirectory))];
+
+    /// <summary>When the game last started with this settings folder, as near as can be told.</summary>
+    private static DateTime LastUsedUtc(string modsDirectory)
+    {
+        string readme = Path.Combine(modsDirectory, "README.txt");
+        return File.Exists(readme)
+            ? File.GetLastWriteTimeUtc(readme)
+            : Directory.GetLastWriteTimeUtc(modsDirectory);
     }
 
     /// <summary>
@@ -354,6 +409,34 @@ public static class GameLocator
     }
 
     /// <summary>
+    /// Environment variable that points <see cref="FindPlayerLog"/> at another file.
+    ///
+    /// For the tests, which must never read the real player's log: what it says would decide what
+    /// they see, and it changes every time the game starts. The settings file has the same
+    /// arrangement in CKS_SETTINGS_DIR.
+    /// </summary>
+    public const string PlayerLogOverrideVariable = "CKS_PLAYER_LOG";
+
+    /// <summary>
+    /// Where the game writes its log, or null off Windows, where this layout does not apply.
+    ///
+    /// Unity keeps it beside the per-user data folders and names it after the company and the
+    /// product rather than after the installation, so every copy of the game writes to the same
+    /// file, and each start replaces it - the one before becomes Player-prev.log.
+    /// </summary>
+    public static string? FindPlayerLog()
+    {
+        string? overridden = Environment.GetEnvironmentVariable(PlayerLogOverrideVariable);
+        if (!string.IsNullOrWhiteSpace(overridden))
+        {
+            return overridden;
+        }
+
+        string? root = GetGameDataRoot();
+        return root is null ? null : Path.Combine(root, "Player.log");
+    }
+
+    /// <summary>
     /// Narrows to a single candidate, throwing with an explanation when there are none, or several and no choice was given.
     /// </summary>
     /// <param name="explicitDirectory">A mods folder given explicitly by the user; null means auto-detect.</param>
@@ -383,7 +466,7 @@ public static class GameLocator
             throw new ToolException(
                 "error.mods.notFound", [],
                 "Core Keeper の MOD 設定フォルダが見つからない。" + Environment.NewLine +
-                "  ゲームを一度起動してワールドに入ると作成される。" + Environment.NewLine +
+                "  ゲームを一度起動すると（タイトル画面が出た時点で）作成される。" + Environment.NewLine +
                 "  場所が分かっている場合は --mods-dir で直接指定すること。");
         }
 

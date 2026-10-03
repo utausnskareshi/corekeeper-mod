@@ -158,6 +158,12 @@ public sealed class PixelCanvas : Control
     /// </summary>
     public event EventHandler? StrokeEnded;
 
+    /// <summary>
+    /// The other button was pressed while a stroke was under way. The stroke stays with the
+    /// button that began it; this only lets a line or rectangle being dragged be called off.
+    /// </summary>
+    public event EventHandler? OtherButtonPressed;
+
     public WriteableBitmap? Source
     {
         get => GetValue(SourceProperty);
@@ -378,9 +384,29 @@ public sealed class PixelCanvas : Control
         // left one drag doing two different things to the picture.
         if (_painting)
         {
+            // Still not a second stroke, but a shape in progress is called off by it: "not that
+            // after all", as the view model has always taken it
+            OtherButtonPressed?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
             return;
         }
+
+        // Only a press that lands on a pixel starts a stroke. The control's hit test includes its
+        // right and bottom edges, so a press exactly on the last grid line reaches here though it
+        // maps to no pixel: RaiseForPoint then returns without raising the start, and every
+        // sample after it arrives as a continuation. The line and rectangle tools take their
+        // origin from the start and had none, so they painted freehand along the drag instead.
+        // Still handled, as the press was before, so nothing above the canvas acts on it.
+        if (ToPixel(e.GetPosition(this)) is null)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // Whichever button began it. Avalonia moves focus on a left press only, so after erasing
+        // with the right button the keyboard stayed in the colour box last typed into: Ctrl+Z
+        // undid that box instead of the stroke, and a tool's letter was typed into the colour.
+        Focus(NavigationMethod.Pointer);
 
         _painting = true;
         _erasing = buttons.IsRightButtonPressed;
@@ -473,6 +499,26 @@ public sealed class PixelCanvas : Control
         }
 
         base.OnPointerWheelChanged(e);
+    }
+
+    /// <summary>
+    /// Swallows the keys that scroll the view while a stroke is in progress, as the wheel is.
+    ///
+    /// The window lets keys through unhandled while painting, so they bubbled up to the
+    /// ScrollViewer, which scrolls on PageUp and PageDown - the only two keys its OnKeyDown
+    /// takes, measured on Avalonia 12.1.1. The sheet then moved under a pointer that had not,
+    /// and the next sample was joined to the last across the whole distance scrolled: a line
+    /// straight through the character, once per frame with "apply to every frame" on.
+    /// </summary>
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (_painting && e.Key is (Key.PageUp or Key.PageDown))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        base.OnKeyDown(e);
     }
 
     protected override void OnPointerExited(PointerEventArgs e)

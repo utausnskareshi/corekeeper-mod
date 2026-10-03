@@ -6,11 +6,12 @@ using SkiaSharp;
 namespace CoreKeeperSkinTool.Layout;
 
 /// <summary>
-/// One preset character: colours and shape choices, not pixels.
+/// One preset character: colours and shape choices, and for some a picture as well.
 ///
-/// The sheet is drawn from this at the positions measured from the game, so a preset costs a few
-/// dozen bytes instead of a 234x156 image, always covers all 39 frames, and stays entirely
-/// original work.
+/// A preset without a picture is drawn from this at the positions measured from the game, so it
+/// costs a few dozen bytes instead of a 234x156 image, always covers all 39 frames, and stays
+/// entirely original work. One with a picture is placed the way an imported picture is; the
+/// colours are still filled in, for recolouring a drawing to that preset's palette.
 /// </summary>
 public sealed class PresetDefinition
 {
@@ -19,6 +20,19 @@ public sealed class PresetDefinition
 
     /// <summary>Group shown in the list (<c>presetGroup.&lt;category&gt;</c>).</summary>
     [JsonPropertyName("category")] public string Category { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Name of an embedded picture to use instead of drawing the recipe, or null to draw it.
+    ///
+    /// A costume with a shape of its own - a wide hat, a hood, plate armour - is not something
+    /// seven colours and a hair style can describe, so those presets carry a picture. The
+    /// colours below are still filled in for them: the window recolours a drawing to a chosen
+    /// preset's palette, and that has to keep working whichever kind the preset is.
+    /// </summary>
+    [JsonPropertyName("image")] public string? Image { get; set; }
+
+    /// <summary>Whether this preset is a recipe drawn at run time rather than a picture.</summary>
+    public bool IsDrawn => string.IsNullOrWhiteSpace(Image);
 
     [JsonPropertyName("skin")] public string Skin { get; set; } = "#E8C09A";
 
@@ -145,6 +159,14 @@ public sealed class PresetLibrary
             if (!Categories.Contains(preset.Category, StringComparer.Ordinal))
             {
                 errors.Add($"{preset.Key} の category が一覧に無い: {preset.Category}");
+            }
+
+            // Caught here rather than when the window builds the entry. A picture that failed to
+            // be embedded would otherwise reach the user as one broken preset among thirty, at
+            // the moment they clicked it, with nothing saying the build was incomplete.
+            if (!preset.IsDrawn && !PresetArt.Exists(preset.Image))
+            {
+                errors.Add($"{preset.Key} の image が埋め込まれていない: {preset.Image}");
             }
         }
 

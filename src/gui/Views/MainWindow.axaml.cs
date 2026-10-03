@@ -32,11 +32,18 @@ public partial class MainWindow : Window
         // back to the window is the moment that always happens, and the scan is skipped unless
         // the save folder actually changed.
         Activated += (_, _) => Model.RefreshCharactersIfChanged();
+        // The same moment for the game's log: starting the game and watching it refuse the mod
+        // ends with switching back here. Read again only when the log has changed.
+        Activated += (_, _) => Model.RefreshModLoadIfChanged();
 
         InstallModButton.Click += OnModButtonClicked;
         GamePathButton.Click += OnGamePathClicked;
         SelectAllCharactersButton.Click += (_, _) => Model.SelectAllCharacters(true);
         SelectNoCharactersButton.Click += (_, _) => Model.SelectAllCharacters(false);
+        SideImageButton.Click += async (_, _) => await OnFacingClickedAsync(side: true);
+        BackImageButton.Click += async (_, _) => await OnFacingClickedAsync(side: false);
+        ClearSideImageButton.Click += async (_, _) => await Model.ClearSideImageAsync();
+        ClearBackImageButton.Click += async (_, _) => await Model.ClearBackImageAsync();
         HelpButton.Click += OnHelpClicked;
         RegenerateButton.Click += OnRegenerateClicked;
         UndoButton.Click += (_, _) => Model.Undo();
@@ -45,6 +52,7 @@ public partial class MainWindow : Window
         Canvas.PixelPointer += (_, e) => Model.HandlePixel(e.X, e.Y, e.IsStart, e.IsErase, e.IsInterpolated);
         Canvas.HoverChanged += (_, e) => Model.UpdateCursorInfo(e.X, e.Y);
         Canvas.StrokeEnded += (_, _) => Model.EndStroke();
+        Canvas.OtherButtonPressed += (_, _) => Model.CancelShapeInProgress();
         RandomButton.Click += (_, _) => Model.LoadRandomCharacter();
         RecolorButton.Click += (_, _) => Model.RecolourToSelectedPreset();
 
@@ -161,7 +169,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Nothing is accepted while the button is down.
+        // Escape while a line or rectangle is being dragged calls it off: the preview goes, and
+        // letting go writes nothing. There was no other way to - the canvas keeps a stroke to the
+        // button that began it - so a shape seen in the wrong place could only be written and
+        // then undone, over every frame by default.
+        if (e.Key == Key.Escape && Canvas.IsPainting && Model.CancelShapeInProgress())
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // Nothing else is accepted while the button is down.
         //
         // Switching tool mid-stroke changes what a half-drawn shape will become, and the shape
         // keeps the tool it started with, so the change would be invisible until the stroke ended.
@@ -320,10 +338,23 @@ public partial class MainWindow : Window
             // Offer to go back to automatic detection first, so a wrong choice is not permanent
             if (MainViewModel.HasManualGamePath)
             {
+                // The other button is named for what it leads to. Declining detection goes on to
+                // the folder picker below, the one way from one chosen folder to another, and a
+                // button saying "やめる" then opened the picker anyway.
                 ConfirmWindow reset = new(
-                    Loc.Instance["confirm.gamePathReset"], "confirm.gamePathResetOk");
+                    Loc.Instance["confirm.gamePathReset"], "confirm.gamePathResetOk",
+                    cancelLabelKey: "confirm.gamePathResetPick");
 
-                if (await reset.ShowDialog<bool?>(this) == true)
+                bool? answer = await reset.ShowDialog<bool?>(this);
+
+                // Escape or the close button: no answer, and both buttons are an action, so
+                // neither is taken. It went on to the folder picker, as the second button does.
+                if (answer is null)
+                {
+                    return;
+                }
+
+                if (answer == true)
                 {
                     Model.SetGamePath(null);
                     return;
@@ -340,6 +371,40 @@ public partial class MainWindow : Window
             if (path is not null)
             {
                 Model.SetGamePath(path);
+            }
+        }
+        catch (Exception ex)
+        {
+            Model.SetStatus("status.pickFailed", ex);
+        }
+    }
+
+    /// <summary>
+    /// Picks a picture for one of the optional facings.
+    ///
+    /// No question about discarding edits, unlike opening a front picture: this replaces the art
+    /// in one direction's frames and leaves the canvas as it is.
+    /// </summary>
+    private async Task OnFacingClickedAsync(bool side)
+    {
+        try
+        {
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = Loc.Instance[side ? "views.side" : "views.back"],
+                AllowMultiple = false,
+                FileTypeFilter =
+                [
+                    new FilePickerFileType(Loc.Instance["dialog.imageFilter"])
+                    {
+                        Patterns = [.. ImageExtensions.Select(x => "*" + x)],
+                    },
+                ],
+            });
+
+            if (files.FirstOrDefault()?.TryGetLocalPath() is { } path)
+            {
+                await (side ? Model.LoadSideImageAsync(path) : Model.LoadBackImageAsync(path));
             }
         }
         catch (Exception ex)
@@ -392,7 +457,8 @@ public partial class MainWindow : Window
             string? path = file?.TryGetLocalPath();
             if (path is not null)
             {
-                Model.Save(path);
+                // After any conversion still on its way, so what is written is what is on screen
+                await Model.SaveWhenSettledAsync(path);
             }
         }
         catch (Exception ex)
@@ -401,7 +467,19 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnInstallClicked(object? sender, RoutedEventArgs e) => Model.InstallToGame();
+    private async void OnInstallClicked(object? sender, RoutedEventArgs e)
+    {
+        // After any conversion or load still on its way: pressed just after a setting changed,
+        // it put the previous picture into the game while the screen went on to the new one
+        try
+        {
+            await Model.InstallToGameWhenSettledAsync();
+        }
+        catch (Exception ex)
+        {
+            Model.SetStatus("status.installFailed", ex);
+        }
+    }
 
     /// <summary>
     /// Opens the help window.
@@ -456,7 +534,8 @@ public partial class MainWindow : Window
 
         if (await dialog.ShowDialog<bool?>(this) == true)
         {
-            Model.RemoveFromCharacters(confirmed);
+            // After any conversion on its way, so its summary does not write over the report
+            await Model.RemoveFromCharactersWhenSettledAsync(confirmed);
         }
     }
 
@@ -491,6 +570,11 @@ public partial class MainWindow : Window
 
         if (plan.IsEmpty)
         {
+            // Nothing to remove means the mod went away outside this window while the bar still
+            // said it was installed. Re-read first and report after, as ExecuteRemoval does after a
+            // partial removal, so the button turns back into "Install mod" and a failed character
+            // scan cannot overwrite the report.
+            Model.RefreshEnvironment();
             Model.SetStatus("status.uninstallNothing");
             return;
         }

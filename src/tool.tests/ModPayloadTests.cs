@@ -101,6 +101,27 @@ public sealed class ModPayloadTests : IDisposable
     }
 
     [Fact]
+    public void 読み取り専用の装備表示設定があっても切り替えられる()
+    {
+        // A backup or sync product that marks one of the four files read-only made the move over
+        // it fail on every attempt: two switched, two not, "もう一度実行すると残りも切り替わる" -
+        // which never came true, and the tool had no way out of the half-switched state.
+        string mods = Path.Combine(_root, "mods-readonly");
+        Directory.CreateDirectory(mods);
+
+        ModConfigWriter.SetGearHidden(mods, "CustomPlayerSkin", hide: true);
+
+        string helm = ModConfigWriter.PathFor(mods, "CustomPlayerSkin", "hideHelm");
+        File.SetAttributes(helm, File.GetAttributes(helm) | FileAttributes.ReadOnly);
+
+        IReadOnlyList<string> written = ModConfigWriter.SetGearHidden(mods, "CustomPlayerSkin", hide: false);
+
+        Assert.Equal(ModConfigWriter.GearKeys.Count, written.Count);
+        Assert.False(ModConfigWriter.IsGearHidden(mods, "CustomPlayerSkin"));
+        Assert.Contains("false", File.ReadAllText(helm), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void 装備表示設定の書き出しは危険なMOD名を拒否する()
     {
         string mods = Path.Combine(_root, "mods3");

@@ -29,6 +29,12 @@ namespace CustomPlayerSkin.Patches
         /// </summary>
         private const int MaxReportedErrors = 64;
 
+        /// <summary>
+        /// The player's own spawn callback. A literal rather than <c>nameof</c>, because the
+        /// member is protected and so cannot be named from here.
+        /// </summary>
+        private const string OnSpawnMethod = "OnSpawn";
+
         [HarmonyPatch(typeof(PlayerController), nameof(PlayerController.RefreshCustomization))]
         [HarmonyPostfix]
         private static void RefreshCustomization_Postfix(PlayerController __instance)
@@ -39,12 +45,31 @@ namespace CustomPlayerSkin.Patches
         /// <summary>
         /// A safety net for paths that start rendering without going through
         /// <c>RefreshCustomization</c>, such as the character creation preview.
+        ///
+        /// The game's Harmony (0Harmony 2.10.2, measured on 1.3.0.3) looks an attribute's method name
+        /// up on the named type only (AccessTools.DeclaredMethod), so this lands on the player's own
+        /// <c>OnSpawn</c> override - <c>EntityMonoBehaviour</c> declares one too, but it is not
+        /// searched. Should a later version drop the player's override, Harmony finds no target and
+        /// throws for this whole class before applying any of its patches: RefreshCustomization goes
+        /// unpatched as well and no picture is applied. The loader logs "failed to patch mod", which
+        /// the companion tool reports as a patch failure. The name is a literal, so compiling against
+        /// the game does not catch it; after a game update, check that PlayerController still
+        /// declares OnSpawn. Resolving the method here instead would mean touching
+        /// <c>System.Reflection</c> - the mod loader verifies the compiled assembly and rejects the
+        /// whole of it for naming that namespace. A test over this source keeps the namespace out.
         /// </summary>
-        [HarmonyPatch(typeof(PlayerController), nameof(PlayerController.OnOccupied))]
+        [HarmonyPatch(typeof(PlayerController), OnSpawnMethod)]
         [HarmonyPostfix]
-        private static void OnOccupied_Postfix(PlayerController __instance)
+        private static void OnSpawn_Postfix(object __instance)
         {
-            SafeApply(__instance, nameof(PlayerController.OnOccupied));
+            // Typed as object and tested rather than cast: one type test per call, where a
+            // PlayerController parameter would throw InvalidCastException for anything else that
+            // ever reached this postfix. It stays as a cheap guard; with the game's Harmony only the
+            // player's own override is patched (see above).
+            if (__instance is PlayerController player)
+            {
+                SafeApply(player, OnSpawnMethod);
+            }
         }
 
         /// <summary>

@@ -83,6 +83,12 @@ public sealed class Loc : INotifyPropertyChanged
 
     public IReadOnlyList<LanguageOption> Languages { get; }
 
+    /// <summary>
+    /// Whether the last language chosen reached the settings file. False where the settings
+    /// cannot be written, and the language then goes back to the default at the next start.
+    /// </summary>
+    public bool LastLanguageSaved { get; private set; } = true;
+
     /// <summary>The current language. Changing it swaps every string on screen at once.</summary>
     public LanguageOption Current
     {
@@ -95,7 +101,10 @@ public sealed class Loc : INotifyPropertyChanged
             }
 
             _current = value;
-            LanguageSettings.Save(value.Code);
+
+            // Kept for whoever shows the change to say when it will not last: this class has
+            // no screen of its own
+            LastLanguageSaved = LanguageSettings.Save(value.Code);
 
             // Swap out the text currently on screen.
             // Each binding targets a per-key LocalizedString, so notify every one of them.

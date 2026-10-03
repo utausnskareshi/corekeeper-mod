@@ -35,6 +35,7 @@ public partial class StartupNoticeWindow : Window
 
         _remaining = remaining;
         _notice = notice;
+        _shownMessages = notice.Messages;
         Apply(notice);
 
         FolderButton.Click += OnFolderClicked;
@@ -91,13 +92,29 @@ public partial class StartupNoticeWindow : Window
     /// </summary>
     private void OnAcceptClicked(object? sender, RoutedEventArgs e)
     {
-        if (_notice.Kind == StartupNoticeKind.Disclaimer)
+        if (_notice.Kind == StartupNoticeKind.Disclaimer && !_notSavedShown)
         {
-            DisclaimerSettings.Accept(StartupGate.ApplicationVersion);
+            if (!DisclaimerSettings.Accept(StartupGate.ApplicationVersion))
+            {
+                // Said before going on. Taken silently, the terms came back at every start under a
+                // notice saying it is shown only once, and nothing pointed at the reason: settings
+                // that cannot be written - an extraction with portable.txt into a folder the user
+                // cannot write to. Using the application this time is not refused; the next press
+                // goes on.
+                _notSavedShown = true;
+                Apply(_notice with
+                {
+                    Messages = [.. Loc.Instance.EveryLanguage("startup.settingsNotSaved", SettingsFile.DescribePath()), .. _notice.Messages],
+                });
+                return;
+            }
         }
 
         ShowNext(_remaining);
     }
+
+    /// <summary>Whether this window has already said that the acceptance could not be saved.</summary>
+    private bool _notSavedShown;
 
     /// <summary>
     /// Lets the user point at the installation, then works out afresh what has to be said.
@@ -127,10 +144,7 @@ public partial class StartupNoticeWindow : Window
 
             if (!GameLocator.IsGameDirectory(path))
             {
-                Apply(_notice with
-                {
-                    Messages = Loc.Instance.EveryLanguage("status.gamePathInvalid", path),
-                });
+                ShowFolderProblem(Loc.Instance.EveryLanguage("status.gamePathInvalid", path));
                 return;
             }
 
@@ -142,10 +156,7 @@ public partial class StartupNoticeWindow : Window
                 // pressing this button forever with the screen never changing. The settings file
                 // sits beside the executable when portable.txt is there, which is where an
                 // extraction into a folder the user cannot write to puts it.
-                Apply(_notice with
-                {
-                    Messages = Loc.Instance.EveryLanguage("status.gamePathNotSaved", SettingsFile.DescribePath()),
-                });
+                ShowFolderProblem(Loc.Instance.EveryLanguage("status.gamePathNotSaved", SettingsFile.DescribePath()));
                 return;
             }
 
@@ -161,12 +172,31 @@ public partial class StartupNoticeWindow : Window
             // warning - and keeping the list this window was built with dropped all but the
             // first of them, so the version warning was never shown.
             _remaining = [.. notices.Skip(1)];
+            _shownMessages = notices[0].Messages;
             Apply(notices[0]);
         }
         catch (Exception ex)
         {
             Apply(_notice with { Details = [new LocalizedText(string.Empty, ex.Message)] });
         }
+    }
+
+    /// <summary>The messages of the notice as it was shown, before any folder problem was added.</summary>
+    private IReadOnlyList<LocalizedText> _shownMessages;
+
+    /// <summary>
+    /// Shows what went wrong with the folder chosen. A fatal notice is replaced by it, having
+    /// nothing to accept; any other keeps what it said underneath. Replaced, the version warning
+    /// lost its whole text - the unsupported version, the look that may break, the advice to back
+    /// up the saves - while its "continue" button stayed, so the user agreed to something no longer
+    /// on screen. Each problem replaces the last one rather than piling up.
+    /// </summary>
+    private void ShowFolderProblem(IReadOnlyList<LocalizedText> problem)
+    {
+        Apply(_notice with
+        {
+            Messages = _notice.Kind == StartupNoticeKind.Fatal ? problem : [.. problem, .. _shownMessages],
+        });
     }
 
     /// <summary>

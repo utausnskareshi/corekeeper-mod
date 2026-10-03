@@ -40,8 +40,10 @@ choosing.
 ### 動作環境
 
 - Windows 10 / 11 (64bit)
-- Steam 版 Core Keeper（動作を確認したバージョンは [`data/supported-versions.json`](data/supported-versions.json) に記載。現在は 1.2.1）
+- Steam 版 Core Keeper（1.3.0.4-511d で動作を確認済み。対応する版は [`data/supported-versions.json`](data/supported-versions.json) に記載）
 - .NET のインストールは不要（配布物は自己完結ビルド）
+
+このツールの版の番号は、対応する Core Keeper の版に合わせています。現在の版 v1.3.0 は Core Keeper 1.3.0 系用です。
 
 ### 入手と使い方
 
@@ -50,15 +52,16 @@ choosing.
 3. 必要ならドット単位で描き直します
 4. 右側でキャラクターにチェックを入れ、「ゲームへ配置」を押します
 
-zip に同梱の `readme.txt` に、SmartScreen の警告への対処やゲームが見つからない場合の手順まで含めた
-詳しい説明があります。アプリ内の「ヘルプ」にも同じ内容があります。
+zip に同梱の `readme.txt` には、アプリを使い始める前に必要なこと（SmartScreen の警告への対処、
+ゲームが見つからない場合の手順）とやめるときの手順を書いています。使い方のすべてはアプリ内の
+「ヘルプ」にあります。
 
 ### できること
 
 - **画像から作る** — ドラッグ＆ドロップで取り込み、背景の透過、切り抜き位置、ドット絵化、輪郭線、
   歩行と攻撃の動き付けを設定できます
-- **プリセットから作る** — 6 カテゴリ 30 種。すべてこのプロジェクトで描いたもので、ゲームの絵は
-  使っていません
+- **プリセットから作る** — 6 カテゴリ 30 種。18 種はこのプロジェクトの画像生成ツールで作った絵、
+  12 種は配色のレシピからツールが描くもので、ゲームの絵は使っていません
 - **ゲーム内の見た目を取り込む** — MOD を導入したキャラクターの現在の見た目を、編集画面へ取り込みます
 - **ドット単位の編集** — 左右対称に描く、全コマに反映、元に戻す／やり直す、シート内の色から選ぶ
 - **動きの確認** — 待機・歩行・攻撃・溜め・運転・着席、正面・右・左・背面
@@ -80,8 +83,8 @@ zip に同梱の `readme.txt` に、SmartScreen の警告への対処やゲー�
 - 動きを付けられるのは歩行（6 コマ）と攻撃（2 コマ）だけです。待機・構え・運転・着席は、ゲーム側が
   それぞれ 1 コマしか持たないため静止したままです
 - 手に持つ武器・ツール・盾・釣り竿は変更できません
-- マルチプレイでは、参加者全員が同じ MOD と同じ画像を導入している必要があります。導入していない人
-  からは通常の見た目に見えます
+- 差し替えた見た目が見えるのは、自分の画面の自分のキャラクターだけです。マルチプレイでは、ほかの
+  参加者から見た自分のキャラクターは、相手が同じ MOD を導入していても通常の見た目のままです
 - ゲームがアップデートされると MOD が動作しなくなる場合があります
 - Windows 版のみに対応します（ゲームと設定フォルダの検出が Windows の仕組みに依存するため）
 
@@ -89,7 +92,8 @@ zip に同梱の `readme.txt` に、SmartScreen の警告への対処やゲー�
 
 ### ソースからのビルド
 
-必要なもの: [.NET 9 SDK](https://dotnet.microsoft.com/download)
+必要なもの: [.NET 9 SDK](https://dotnet.microsoft.com/download) の 9.0.300 以降（GUI が使う Avalonia の
+コード生成は、それより前の SDK のコンパイラでは動きません）
 
 ```bash
 dotnet build src/gui/CoreKeeperSkinTool.Gui.csproj -c Release
@@ -97,16 +101,19 @@ dotnet test src/tool.tests/CoreKeeperSkinTool.Tests.csproj
 dotnet test src/gui.tests/CoreKeeperSkinTool.Gui.Tests.csproj
 ```
 
+GUI をビルドすると、Avalonia がビルド時の匿名の利用統計を avaloniaui.net へ送ります（配布物の実行時には
+送りません）。送らないようにするには、環境変数 `AVALONIA_TELEMETRY_OPTOUT=1` を設定してからビルドしてください。
+
 MOD の同梱データ `build/mod-payload/CustomPlayerSkin.zip` はリポジトリに含みません。これが無い
 ままビルドすると、MOD 導入機能が使えないアプリになります（ビルド時に警告が出ます）。テストは
-同梱データを検証する `ModPayloadTests` の 8 件だけが失敗し、残る 508 件は通ります。作り直すには
+同梱データを使う `ModPayloadTests`（8 件）と `ModPayloadLinkTests`（4 件）だけが失敗し、残る 911 件は通ります。作り直すには
 Unity 6000.0.59f2 と、Pugstorm が配布している Core Keeper Mod SDK が必要です。SDK 自体もこの
 リポジトリには含まないため、`CoreKeeperModSDK/` に自分で配置してください。
 
 ```powershell
 scripts/setup-dev.ps1           # .NET SDK・Unity・AssetRipper の確認と導入
 scripts/setup-mod-project.ps1   # src/mod を SDK のプロジェクトへ接続
-scripts/build-mod.ps1           # Unity バッチビルド（約 4 分）
+scripts/build-mod.ps1           # Unity バッチビルド（約 5 分）
 scripts/package-release.ps1     # 配布用 zip の作成
 ```
 
@@ -123,16 +130,16 @@ scripts/package-release.ps1     # 配布用 zip の作成
 | `src/gui` | GUI (`cks-gui`、Avalonia) |
 | `src/mod` | ゲーム内 MOD（PugMod。C# ソースで配布） |
 | `src/sdk-editor` | Unity のバッチビルドに使うエディタスクリプト |
-| `src/tool.tests`, `src/gui.tests` | テスト（516 件） |
-| `data` | ゲームから実測した座標と、プリセットの配色 |
+| `src/tool.tests`, `src/gui.tests` | テスト（923 件） |
+| `data` | ゲームから実測した座標、プリセットの配色と絵、画像生成用のプロンプト |
 | `scripts` | 開発・ビルド・配布用の PowerShell |
 | `packaging` | 配布物に同梱する readme |
 
 ### ゲームのアセットについて
 
 このリポジトリにゲームの画像・音声・アセンブリは一切含みません。`data/` にあるのは矩形座標などの
-実測値と、このプロジェクトで書いた配色レシピだけです。Core Keeper 本体とそのアセット・商標は
-Pugstorm に帰属します。
+実測値と、このプロジェクトで用意した配色レシピ・プリセットの絵・画像生成用のプロンプトだけです。
+Core Keeper 本体とそのアセット・商標は Pugstorm に帰属します。
 
 ### ライセンス
 
@@ -169,9 +176,12 @@ accepting it.
 ### Requirements
 
 - Windows 10 / 11 (64-bit)
-- Core Keeper on Steam. The versions this has been checked against are listed in
-  [`data/supported-versions.json`](data/supported-versions.json) - currently 1.2.1
+- Core Keeper on Steam, checked with 1.3.0.4-511d. The versions it supports are listed in
+  [`data/supported-versions.json`](data/supported-versions.json)
 - No .NET installation: the released build is self-contained
+
+The version number of this tool follows the Core Keeper version it is made for: the current
+version, v1.3.0, is for Core Keeper 1.3.0.x.
 
 ### Getting it, and using it
 
@@ -180,15 +190,17 @@ accepting it.
 3. Redraw pixels by hand if you want to
 4. Tick a character on the right and press "Apply to game"
 
-The `readme.txt` inside the zip goes through everything in detail, including the SmartScreen
-warning and what to do when the game cannot be found. The same text is in the application's help.
+The `readme.txt` inside the zip covers what you need before you can start using the application -
+the SmartScreen warning and what to do when the game cannot be found - and how to remove it.
+Everything about using it is in the application's help.
 
 ### What it does
 
 - **From a picture** - drag and drop, then choose how the background is removed, where the crop
   sits, how it is reduced to pixels, whether it gets an outline, and how it moves when walking
   or swinging
-- **From a preset** - 30 characters in 6 categories, all drawn for this project; none of the
+- **From a preset** - 30 characters in 6 categories: 18 are pictures made for this project with
+  its companion image generator, and the tool draws the other 12 from colour recipes; none of the
   game's own artwork is involved
 - **From the game** - fetch a character's current appearance into the editor
 - **Pixel editing** - mirrored drawing, apply to every frame, undo and redo, pick from the
@@ -214,8 +226,8 @@ rectangles come from the JSON in [`data/`](data), measured from the game.
 - Only walking (6 frames) and swinging (2 frames) can be animated. Idle, aim, drive and sit hold
   a single frame each in the game, so they stay still
 - Held weapons, tools, shields and fishing rods cannot be changed
-- In multiplayer everyone needs the same mod and the same picture. To anyone without them, your
-  character looks ordinary
+- The replaced look is shown only for your own character on your own screen. In multiplayer, the
+  other players see your character looking ordinary, even if they have installed the same mod
 - A game update can stop the mod from working
 - Windows only: finding the game and its settings folder relies on how Windows does things
 
@@ -223,7 +235,8 @@ The application's help lists all of them.
 
 ### Building from source
 
-You need the [.NET 9 SDK](https://dotnet.microsoft.com/download).
+You need the [.NET 9 SDK](https://dotnet.microsoft.com/download), version 9.0.300 or later (the
+code generator of Avalonia, which the GUI uses, does not run on the compiler of earlier SDKs).
 
 ```bash
 dotnet build src/gui/CoreKeeperSkinTool.Gui.csproj -c Release
@@ -231,16 +244,21 @@ dotnet test src/tool.tests/CoreKeeperSkinTool.Tests.csproj
 dotnet test src/gui.tests/CoreKeeperSkinTool.Gui.Tests.csproj
 ```
 
+Building the GUI makes Avalonia send anonymous build-time usage statistics to avaloniaui.net (the
+released application sends nothing when it runs). To opt out, set the environment variable
+`AVALONIA_TELEMETRY_OPTOUT=1` before building.
+
 The bundled mod, `build/mod-payload/CustomPlayerSkin.zip`, is not in the repository. Building
 without it produces an application whose install-mod feature cannot work, and the build says so.
-The 8 tests in `ModPayloadTests`, which check that bundle, fail without it; the other 508 pass.
+The tests that use that bundle - 8 in `ModPayloadTests` and 4 in `ModPayloadLinkTests` - fail
+without it; the other 911 pass.
 Rebuilding it needs Unity 6000.0.59f2 and the Core Keeper Mod SDK that Pugstorm distributes. The
 SDK is not in this repository either: put it in `CoreKeeperModSDK/` yourself.
 
 ```powershell
 scripts/setup-dev.ps1           # check for and install the .NET SDK, Unity and AssetRipper
 scripts/setup-mod-project.ps1   # attach src/mod to the SDK project
-scripts/build-mod.ps1           # Unity batch build, about 4 minutes
+scripts/build-mod.ps1           # Unity batch build, about 5 minutes
 scripts/package-release.ps1     # build the release zip
 ```
 
@@ -257,16 +275,17 @@ installs it there.
 | `src/gui` | The GUI (`cks-gui`, Avalonia) |
 | `src/mod` | The in-game mod (PugMod, shipped as C# source) |
 | `src/sdk-editor` | Editor script used by the Unity batch build |
-| `src/tool.tests`, `src/gui.tests` | Tests (516 of them) |
-| `data` | Measurements taken from the game, and the preset colour recipes |
+| `src/tool.tests`, `src/gui.tests` | Tests (923 of them) |
+| `data` | Measurements taken from the game, the preset colour recipes and pictures, and the image-generator prompt |
 | `scripts` | PowerShell for development, building and packaging |
 | `packaging` | The readme that ships inside the zip |
 
 ### About the game's assets
 
 This repository contains none of the game's artwork, audio or assemblies. What `data/` holds is
-measurements - rectangles and coordinates - and colour recipes written for this project. Core
-Keeper itself, its assets and its trademarks belong to Pugstorm.
+measurements - rectangles and coordinates - plus the colour recipes, preset pictures and
+image-generator prompt prepared for this project. Core Keeper itself, its assets and its
+trademarks belong to Pugstorm.
 
 ### Licence
 

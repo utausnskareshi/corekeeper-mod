@@ -110,6 +110,16 @@ public static class GameVersion
         return new GameVersionCheck(state, version, SupportedVersions);
     }
 
+    /// <summary>
+    /// The supported versions as they are shown to the user, at the granularity they are matched
+    /// on: "1.3.0.1" in the list stands for every 1.3.0 build, so it is shown as "1.3.0.x". Shown as
+    /// written, the warning read as if 1.3.0.2 and 1.3.0.3 were outside the supported range.
+    /// </summary>
+    public static string DescribeSupported(IEnumerable<string> supported) =>
+        string.Join(", ", supported
+            .Select(s => MajorMinorPatch(s) is { } family ? family + ".x" : s)
+            .Distinct(StringComparer.Ordinal));
+
     /// <summary>Whether a version string matches one of the supported ones.</summary>
     public static bool IsSupported(string? version)
     {

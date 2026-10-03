@@ -15,6 +15,7 @@ namespace CoreKeeperSkinTool.Tests;
 /// awkward: the byte-per-field name encoding, two customization formats, and a tail of the file
 /// that is not valid JSON at all.
 /// </summary>
+[Collection(ChildProcessCollection.Name)]
 public sealed class CharacterTests : IDisposable
 {
     private static readonly SheetLayout Layout = SheetLayout.LoadEmbedded();
@@ -127,9 +128,9 @@ public sealed class CharacterTests : IDisposable
     /// </summary>
     private static string ModFolder => SheetInstaller.DefaultModFolderName;
 
-    private const string GuidA = "51de68411441dbc2eedaea3b960739a2";
-    private const string GuidB = "7e50f112849de2879e102799a3aa7eb5";
-    private const string GuidC = "2d5e15e794ac57f59f94a17a180a05f0";
+    private const string GuidA = "3825ebc1f472f28e5b9e984c425e01d5";
+    private const string GuidB = "41e7dabc86c6294dd77ce4221a453eb6";
+    private const string GuidC = "2dd37bbd1ee73adaff410301961b5574";
 
     // ------------------------------------------------------------ Reading characters
 
@@ -286,10 +287,10 @@ public sealed class CharacterTests : IDisposable
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("51de6841")]
-    [InlineData("51de68411441dbc2eedaea3b960739a")]
-    [InlineData("51de68411441dbc2eedaea3b960739a2a")]
-    [InlineData("51de68411441dbc2eedaea3b960739g2")]
+    [InlineData("3825ebc1")]
+    [InlineData("3825ebc1f472f28e5b9e984c425e01d")]
+    [InlineData("3825ebc1f472f28e5b9e984c425e01d5a")]
+    [InlineData("3825ebc1f472f28e5b9e984c425e01g5")]
     [InlineData("../../../etc/passwd")]
     public void IsValidGuid_想定外の識別子を弾く(string? guid)
     {
@@ -297,6 +298,119 @@ public sealed class CharacterTests : IDisposable
     }
 
     // ------------------------------------------------------------ Per-character images
+
+    /// <summary>The folder the mod reads each character's picture from.</summary>
+    private string SkinsDirectory => Path.Combine(ModsDirectory, ModFolder, "skins");
+
+    /// <summary>A staging file of the shape an interrupted run leaves behind.</summary>
+    private string WriteAbandonedStaging(string guid, int owner)
+    {
+        Directory.CreateDirectory(SkinsDirectory);
+        string path = Path.Combine(SkinsDirectory, $"{guid}.png.{owner}.new");
+        File.WriteAllBytes(path, new byte[64]);
+        return path;
+    }
+
+    /// <summary>
+    /// A process id that is certainly not in use: one belonging to a process that has just ended.
+    ///
+    /// Made rather than invented. Measured: id 0 comes back as the idle process and id 4 as the
+    /// system one, so neither stands in for a run that is gone, and an id picked out of the air
+    /// would be a guess about what the machine happens to be running.
+    /// </summary>
+    private static int FinishedProcessId()
+    {
+        using System.Diagnostics.Process finished = System.Diagnostics.Process.Start(
+            new System.Diagnostics.ProcessStartInfo("cmd.exe", "/c exit")
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            })!;
+
+        finished.WaitForExit();
+        return finished.Id;
+    }
+
+    [Fact]
+    public void Install_死んだ実行が残した作業ファイルを片付ける()
+    {
+        // Ctrl+C does not unwind, so the copy made beside a character and not yet swapped in stays
+        // there: a full-sized file the mod never reads, that install --list never shows because it
+        // only looks at *.png, and that nothing cleared short of removing the settings folder. The
+        // delete on the way in only clears the name this process would use, and the name carries
+        // the process id.
+        if (!OperatingSystem.IsWindows())
+        {
+            // The stand-in for a finished process is started with cmd.exe
+            return;
+        }
+
+        string abandoned = WriteAbandonedStaging(GuidB, FinishedProcessId());
+        string sheet = CreateValidSheet();
+
+        CharacterSkins.Install(sheet, Layout, ModsDirectory, ModFolder, [GuidA]);
+
+        Assert.False(File.Exists(abandoned), "死んだ実行の作業ファイルが残っている");
+    }
+
+    [Fact]
+    public void Install_動いている実行の作業ファイルには手を出さない()
+    {
+        // Two copies of the tool may install at the same time - that is what the process id in the
+        // name is for - so a staging file whose process is still alive belongs to a run that is
+        // about to move it. Deleting it would make that run fail and report a partial install it
+        // never had. This process is the live one here.
+        string live = WriteAbandonedStaging(GuidB, Environment.ProcessId);
+        string sheet = CreateValidSheet();
+
+        CharacterSkins.Install(sheet, Layout, ModsDirectory, ModFolder, [GuidA]);
+
+        Assert.True(File.Exists(live), "動いている実行の作業ファイルが消された");
+    }
+
+    [Fact]
+    public void Install_開けないプロセスの番号を持つ作業ファイルがあっても導入できる()
+    {
+        // A staging file outlives its run, and its id can later be handed to a process this user
+        // cannot open - a service, an elevated program. Asked whether it has exited, such a
+        // process does not answer: HasExited throws Win32Exception (access denied). That was not
+        // among the exceptions the sweep caught, so it left the sweep and took the whole install
+        // with it, whichever characters were chosen, until the id was freed - for a service, not
+        // before a reboot - and all the user was told was that access was denied.
+        //
+        // Id 4 is the system process, as FinishedProcessId's note records: running, and closed
+        // to an ordinary user.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string unreadable = WriteAbandonedStaging(GuidB, 4);
+        string sheet = CreateValidSheet();
+
+        CharacterSkins.Install(sheet, Layout, ModsDirectory, ModFolder, [GuidA]);
+
+        // Counted as still running, which is the way the sweep leans when it cannot tell: the file
+        // is left for a later sweep, and the install goes ahead.
+        Assert.True(File.Exists(unreadable), "開けないプロセスの作業ファイルが消された");
+        Assert.True(File.Exists(Path.Combine(SkinsDirectory, $"{GuidA}.png")), "導入が行われていない");
+    }
+
+    [Fact]
+    public void Install_中断すると1体も入れ替えずに作業ファイルも残さない()
+    {
+        // The token is read while the copies are made and not afterwards, so an interrupted run
+        // leaves every character with the picture it had. What it must not leave is the copy.
+        string sheet = CreateValidSheet();
+        using CancellationTokenSource cancelled = new();
+        cancelled.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() => CharacterSkins.Install(
+            sheet, Layout, ModsDirectory, ModFolder, [GuidA, GuidB], cancelled.Token));
+
+        Assert.Empty(CharacterSkins.InstalledGuids(ModsDirectory, ModFolder));
+        Assert.Empty(Directory.EnumerateFiles(SkinsDirectory));
+    }
 
     [Fact]
     public void Install_選んだキャラクターにだけ配置される()
@@ -337,6 +451,34 @@ public sealed class CharacterTests : IDisposable
             File.ReadAllBytes(CharacterSkins.PathFor(ModsDirectory, ModFolder, GuidB)));
 
         Assert.NotEqual(File.ReadAllBytes(red), File.ReadAllBytes(blue));
+    }
+
+    [Fact]
+    public void Install_同じ更新日時の別の画像に差し替えても更新として見える()
+    {
+        // The mod reloads a skin when the file's last-write time moves. File.Copy carries the
+        // source's time over, so two pictures with the same time - a folder of skins unpacked
+        // from one zip, all stamped with the commit time - replaced each other on disk while the
+        // running game kept showing the first, with the tool saying it would appear in seconds.
+        string knight = CreateValidSheet(SKColors.Red, "knight.png");
+        string wizard = CreateValidSheet(SKColors.Blue, "wizard.png");
+
+        DateTime shared = new(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(knight, shared);
+        File.SetLastWriteTimeUtc(wizard, shared);
+
+        string placed = CharacterSkins.PathFor(ModsDirectory, ModFolder, GuidA);
+
+        CharacterSkins.Install(knight, Layout, ModsDirectory, ModFolder, [GuidA]);
+        DateTime first = File.GetLastWriteTimeUtc(placed);
+
+        CharacterSkins.Install(wizard, Layout, ModsDirectory, ModFolder, [GuidA]);
+        DateTime second = File.GetLastWriteTimeUtc(placed);
+
+        Assert.Equal(File.ReadAllBytes(wizard), File.ReadAllBytes(placed));
+        Assert.NotEqual(shared, first);
+        Assert.True(second >= first, "差し替え後の更新日時が前の配置より古い");
+        Assert.NotEqual(shared, second);
     }
 
     [Fact]
@@ -518,6 +660,30 @@ public sealed class CharacterTests : IDisposable
             () => CharacterSkins.Install(sheet, Layout, ModsDirectory, ModFolder, [GuidA, GuidB]));
 
         Assert.Equal(before, File.ReadAllBytes(first));
+    }
+
+    /// <summary>
+    /// The characters already swapped in really have changed, as the comment at the throw says,
+    /// but the command line was told only "2 of 4" - never which two, nor which file stopped it.
+    /// The identifiers are what install --list prints beside each slot and name.
+    /// </summary>
+    [Fact]
+    public void Install_途中で失敗したら適用済みの識別子と失敗したファイルを文面に含める()
+    {
+        string sheet = CreateValidSheet();
+        string blocked = CharacterSkins.PathFor(ModsDirectory, ModFolder, GuidB);
+
+        // A folder where B's picture should go: A is swapped in, then B fails
+        Directory.CreateDirectory(blocked);
+
+        ToolException error = Assert.Throws<ToolException>(
+            () => CharacterSkins.Install(sheet, Layout, ModsDirectory, ModFolder, [GuidA, GuidB, GuidC]));
+
+        Assert.Equal("error.character.partial", error.MessageKey);
+        Assert.Equal([1, 3], error.MessageArguments.Cast<int>());
+        Assert.Contains(GuidA, error.Message, StringComparison.Ordinal);
+        Assert.Contains(blocked, error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(GuidC, error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

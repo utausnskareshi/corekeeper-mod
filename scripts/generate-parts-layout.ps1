@@ -108,7 +108,21 @@ foreach ($name in $parts.Keys) {
 }
 
 $json = $result | ConvertTo-Json -Depth 8
-[System.IO.File]::WriteAllText($Output, $json, (New-Object System.Text.UTF8Encoding($false)))
+
+# Left alone when nothing but the verifiedVersions line differs, for the reason given in
+# generate-layout.ps1: rewriting it dropped the record of the builds the boxes were checked against.
+$unchanged = $false
+if (Test-Path $Output) {
+    $oldJson = [System.IO.File]::ReadAllText($Output, (New-Object System.Text.UTF8Encoding($false)))
+    $stripped = [regex]::Replace($oldJson, '(?m)^[ \t]*"verifiedVersions":.*\r?\n', '')
+    $unchanged = ($stripped -ne $oldJson) -and (($stripped -replace "`r`n", "`n") -eq ($json -replace "`r`n", "`n"))
+}
+if ($unchanged) {
+    Write-Output "実測値は既存の $Output と同じ。verifiedVersions を保つため書き換えない。確かめた版を verifiedVersions に足すこと。"
+}
+else {
+    [System.IO.File]::WriteAllText($Output, $json, (New-Object System.Text.UTF8Encoding($false)))
+}
 
 Write-Output ''
 Write-Output "書き出し: $Output ($([math]::Round((Get-Item $Output).Length / 1KB, 1)) KB)"

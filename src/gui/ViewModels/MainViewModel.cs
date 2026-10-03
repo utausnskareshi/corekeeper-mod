@@ -73,6 +73,22 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>The loaded source image, kept so settings changes do not force a reload.</summary>
     private SKBitmap? _sourceImage;
 
+    /// <summary>
+    /// Pictures for the side-facing and back-facing frames, when the user supplied them.
+    ///
+    /// Optional throughout: with neither, the sheet is built exactly as it always was, from the
+    /// front view alone. They live under the same gate as the front picture, because a
+    /// conversion reads all three on a worker thread.
+    /// </summary>
+    private SKBitmap? _sideImage;
+
+    private SKBitmap? _backImage;
+
+    /// <summary>Where the side-facing and back-facing pictures came from, for the panel to show.</summary>
+    private string? _sidePath;
+
+    private string? _backPath;
+
     /// <summary>Token used to collapse a burst of refresh requests.</summary>
     private CancellationTokenSource? _pending;
 
@@ -81,6 +97,31 @@ public sealed partial class MainViewModel : ObservableObject
     /// A conversion reads it on a worker thread, so nothing may replace or dispose it meanwhile.
     /// </summary>
     private readonly SemaphoreSlim _buildGate = new(1, 1);
+
+    /// <summary>
+    /// Loads of a picture under way, the front or another facing, from the start of the decode to
+    /// the end of what follows it. Touched on the UI thread only.
+    /// </summary>
+    private int _loadsInFlight;
+
+    /// <summary>
+    /// Rebuilds asked for and not yet finished, from the request through its 120 ms wait to the end
+    /// of the conversion it starts. Counted across threads, the wait running on the thread pool.
+    /// </summary>
+    private int _rebuildRequestsInFlight;
+
+    /// <summary>
+    /// Pictures that were on their way in and did not arrive: a load or a conversion that failed,
+    /// that was refused because the canvas had been drawn on, or that was called off, and a preset
+    /// that could not be built. Counted, with what was said about the latest one, for the buttons
+    /// that wait for the picture to settle. Waiting through one of these, "Apply to game" and
+    /// "Save" went on with the picture from before and said they had applied or saved it, over the
+    /// message that said why the new one had not come. Touched on the UI thread only.
+    /// </summary>
+    private int _picturesNotArrived;
+
+    /// <summary>What was said about the latest picture that did not arrive.</summary>
+    private Func<string>? _whyNotArrived;
 
     /// <summary>
     /// Incremented for every conversion request. Only the request whose number still matches
@@ -93,6 +134,17 @@ public sealed partial class MainViewModel : ObservableObject
     /// finishes last is not necessarily the one asked for last, and only the newest may publish.
     /// </summary>
     private int _loadVersion;
+
+    /// <summary>
+    /// Ordering for the side and back pictures, one number each.
+    ///
+    /// Kept apart from <see cref="_loadVersion"/> because a facing does not replace the front
+    /// picture and must not call its load off. Two loads of the same facing do replace each
+    /// other, for the same reason the front picture's do: decoding runs on a worker thread, so
+    /// the one that finishes last is not necessarily the one asked for last.
+    /// </summary>
+    private int _sideVersion;
+    private int _backVersion;
 
     /// <summary>Position within the animation currently being played.</summary>
     private int _animationStep;
@@ -134,7 +186,20 @@ public sealed partial class MainViewModel : ObservableObject
         Loc.Instance.PropertyChanged += (_, _) => OnLanguageChanged();
 
         _animationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000.0 / 8) };
-        _animationTimer.Tick += (_, _) => AdvanceAnimation();
+        // Caught here and recorded: an exception escaping a timer's Tick reaches no handler on
+        // Avalonia 12.1.1 and stops the timer for good, so the preview froze with no dialog, no
+        // log, and Start() - left enabled - doing nothing until play was pressed twice
+        _animationTimer.Tick += (_, _) =>
+        {
+            try
+            {
+                AdvanceAnimation();
+            }
+            catch (Exception ex)
+            {
+                Program.ReportHandled(ex);
+            }
+        };
 
         RefreshEnvironment();
         LoadPresets();
@@ -288,13 +353,19 @@ public sealed partial class MainViewModel : ObservableObject
                 _animationTimer.Start();
             }
 
+            // A preset made from a picture is shaded art scaled down, nearly every pixel its own
+            // colour, so the fill and the colour replace reach a pixel or two - "paint over it as
+            // it is" promised what they could not do there.
             SetStatus(() => choice.Definition is null
                 ? Loc.Instance["status.starter"]
-                : Loc.Instance.Format("status.presetLoaded", choice.Display));
+                : !choice.Definition.IsDrawn
+                    ? Loc.Instance.Format("status.presetLoadedPicture", choice.Display)
+                    : Loc.Instance.Format("status.presetLoaded", choice.Display));
         }
         catch (Exception ex)
         {
             SetStatus("status.starterFailed", ex);
+            NoteNotArrived();
         }
     }
 
@@ -361,6 +432,7 @@ public sealed partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             SetStatus("status.starterFailed", ex);
+            NoteNotArrived();
         }
     }
 
@@ -371,18 +443,32 @@ public sealed partial class MainViewModel : ObservableObject
     public Loc Localization => Loc.Instance;
 
     /// <summary>
+    /// The window's title, carrying the tool's version. The version follows the game's - 1.3.0 for
+    /// Core Keeper 1.3.0.x - and nothing else in the window said which one was running.
+    /// </summary>
+    public string WindowTitle => $"{Loc.Instance["app.title"]} v{ProductVersion}";
+
+    /// <summary>The tool's version as major.minor.patch, set once in src/Directory.Build.props.</summary>
+    internal static string ProductVersion { get; } =
+        typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "0";
+
+    /// <summary>
     /// The character the sheet was taken from, or null when it came from a file.
     ///
     /// A captured appearance is filed under the character's identifier inside the mod's own
     /// settings folder, so its path names a place the user never chose and a file they cannot
     /// recognise. What they picked was a character, so a character is what is shown.
+    ///
+    /// The choice itself is kept rather than its name as text. The text was made in the language
+    /// of the moment, so after a switch the label still read "［クリエイティブ］" or "（名前なし）"
+    /// while everything around it had changed; Display reads the current language each time.
     /// </summary>
-    private string? _fetchedFrom;
+    private CharacterChoice? _fetchedFrom;
 
     /// <summary>Path of the loaded image, or guidance text when nothing is loaded.</summary>
     public string SourceDisplay =>
         _fetchedFrom is { } character
-            ? Loc.Instance.Format("character.fetchedFrom", character)
+            ? Loc.Instance.Format("character.fetchedFrom", character.Display)
             : SourcePath ?? Loc.Instance["top.dropHint"];
 
     partial void OnSourcePathChanged(string? value)
@@ -394,6 +480,20 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Last cursor position, used to rebuild the readout after a language change.</summary>
     private (int X, int Y)? _lastCursor;
+
+    /// <summary>
+    /// The notice that a language switch could not be saved, while it is what the line says, and
+    /// the message it was written over.
+    ///
+    /// The notice is about one switch. Written again like any other message, it stayed after a
+    /// later switch had saved - naming a place that could by then be written, and saying the
+    /// language would go back at the next start when it would not (the final review of
+    /// 2026-10-02). A switch that saves puts back what the notice covered.
+    /// </summary>
+    private Func<string>? _languageNotice;
+
+    /// <inheritdoc cref="_languageNotice"/>
+    private Func<string>? _beforeLanguageNotice;
 
     /// <summary>
     /// Rebuilds list labels and already-composed strings when the language changes.
@@ -420,6 +520,7 @@ public sealed partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(PlayButtonLabel));
         OnPropertyChanged(nameof(GearButtonLabel));
         OnPropertyChanged(nameof(StaticPreviewNote));
+        OnPropertyChanged(nameof(WindowTitle));
 
         // Read from the localisation on every get, and nothing else raises them: the mod button
         // is only notified when the installed state actually changes, which a language switch
@@ -428,12 +529,28 @@ public sealed partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ModButtonTip));
         OnPropertyChanged(nameof(NoCharactersMessage));
 
+        // These two read the localisation only while no file is chosen, which is the state the
+        // window opens in - so the one line that stayed in the old language was the one every
+        // user sees first.
+        OnPropertyChanged(nameof(SideImageLabel));
+        OnPropertyChanged(nameof(BackImageLabel));
+
         RefreshEnvironment();
 
         if (_lastCursor is { } cursor)
         {
             UpdateCursorInfo(cursor.X, cursor.Y);
         }
+
+        // The notice that the last switch could not be saved goes, if nothing has been said since:
+        // this switch says afresh, below, whether it saved
+        if (_languageNotice is not null && ReferenceEquals(_statusRecipe, _languageNotice))
+        {
+            _statusRecipe = _beforeLanguageNotice;
+        }
+
+        _languageNotice = null;
+        _beforeLanguageNotice = null;
 
         // Written again from the recipe that produced it, so the line follows the switch rather
         // than staying in the language it was composed in. A line written as a plain string has
@@ -458,6 +575,17 @@ public sealed partial class MainViewModel : ObservableObject
         else if (Document is null)
         {
             SetStatus("status.start");
+        }
+
+        // Last, over whatever the line was rewritten to: the language changed on screen but did
+        // not reach the settings file, so it will not be there at the next start. Said, as a game
+        // folder that could not be saved is.
+        if (!Loc.Instance.LastLanguageSaved)
+        {
+            string covered = Status;
+            _beforeLanguageNotice = _statusRecipe ?? (() => covered);
+            SetStatus("status.languageNotSaved", SettingsFile.DescribePath());
+            _languageNotice = _statusRecipe;
         }
     }
 
@@ -567,6 +695,21 @@ public sealed partial class MainViewModel : ObservableObject
     /// with no message to say why.
     /// </summary>
     public bool HasSourceImage => _sourceImage is not null;
+
+    /// <summary>Whether a picture was supplied for the side-facing frames.</summary>
+    public bool HasSideImage => _sideImage is not null;
+
+    /// <summary>Whether a picture was supplied for the back-facing frames.</summary>
+    public bool HasBackImage => _backImage is not null;
+
+    /// <summary>Name of the side-facing picture, or a word saying there is none.</summary>
+    public string SideImageLabel => FacingLabel(_sidePath);
+
+    /// <summary>Name of the back-facing picture, or a word saying there is none.</summary>
+    public string BackImageLabel => FacingLabel(_backPath);
+
+    private string FacingLabel(string? path) =>
+        path is { Length: > 0 } ? Path.GetFileName(path) : Loc.Instance["views.none"];
 
     // ------------------------------------------------------------ Import settings
 
@@ -800,10 +943,17 @@ public sealed partial class MainViewModel : ObservableObject
         // whatever was drawn in the meantime would count as something the user agreed to lose.
         (EditorDocument? Document, bool Edited) baseline = (Document, WouldDiscardEdits);
 
+        // The revision at the same moment. A document that is already edited stays IsModified
+        // however much more is drawn on it, so what was drawn after this is told by the count.
+        long revisionAtStart = Document?.Revision ?? 0;
+
         // Shown for the decode too, not only for the conversion that follows. An eight-thousand
         // pixel photograph spends a quarter of a second here with nothing on screen to say so,
         // and the canvas stays live throughout, so the window looks idle while it is not.
         IsBusy = true;
+
+        // Counted for "Apply to game" and "Save", which wait until nothing is on its way in
+        _loadsInFlight++;
 
         try
         {
@@ -831,6 +981,7 @@ public sealed partial class MainViewModel : ObservableObject
                 {
                     decoded.Dispose();
                     SetStatus("status.loadCancelled");
+                    NoteNotArrived();
                     return;
                 }
 
@@ -842,17 +993,10 @@ public sealed partial class MainViewModel : ObservableObject
 
                 if (asSheet == true)
                 {
-                    await LoadAsSheetAsync(decoded, path, complete, load, baseline);
+                    await LoadAsSheetAsync(decoded, path, complete, load, baseline, revisionAtStart);
                     return;
                 }
             }
-
-            // The command line has always warned about this; the window did not, and the window
-            // is the way most people load a picture. A download that stopped halfway decodes
-            // into an image whose missing part is transparent, and the conversion then trims to
-            // what survived and scales it up to fill the frame, so the result looks deliberate.
-            _truncatedSource = !complete;
-            SourceWasTruncated = !complete;
 
             // A conversion already in flight is still reading the previous bitmap on a worker
             // thread. Freeing it here would pull the pixel buffer out from under SkiaSharp,
@@ -868,9 +1012,39 @@ public sealed partial class MainViewModel : ObservableObject
                     return;
                 }
 
+                // Nothing drawn on the document now showing, and that document put there by a
+                // conversion of the previous picture that finished while this one was being read
+                // or waited here. That is not a change the user made, so the reading is taken
+                // again: kept, it made the new picture's conversion count as replaced and throw
+                // itself away, leaving this file's name over the old picture and a message naming
+                // a button that was not on screen. Whether there was drawing when the file was
+                // chosen does not matter: the only conversion that can publish over a drawing is
+                // one whose loss the user already agreed to. Anything drawn on the new document
+                // keeps WouldDiscardEdits true and the reading as it was.
+                if (!WouldDiscardEdits && !ReferenceEquals(Document, baseline.Document))
+                {
+                    baseline = (Document, false);
+                    revisionAtStart = Document?.Revision ?? 0;
+                }
+
                 _sourceImage?.Dispose();
                 _sourceImage = decoded;
                 SourcePath = path;
+
+                // The command line has always warned about this; the window did not, and the
+                // window is the way most people load a picture. A download that stopped halfway
+                // decodes into an image whose missing part is transparent, and the conversion
+                // then trims to what survived and scales it up to fill the frame, so the result
+                // looks deliberate.
+                //
+                // Written here, with the picture, and not as soon as the decode finished: the
+                // check above sends a superseded load home without publishing, and a flag set
+                // before it stayed behind. Choosing a preset or the random character while a
+                // conversion held the gate did just that, and the banner - which stays until
+                // something else is opened - then described a file that was never opened, over a
+                // complete picture and a summary line about that other picture.
+                _truncatedSource = !complete;
+                SourceWasTruncated = !complete;
 
                 // Raised here, where the picture arrives, rather than only when a conversion
                 // publishes. The import settings panel is bound to this, and the conversion that
@@ -886,18 +1060,29 @@ public sealed partial class MainViewModel : ObservableObject
 
             // Opening an image replaces everything the user had when they chose it - but only
             // that, which is why the reading taken at the top goes with it.
-            await RebuildAsync(discardEdits: true, baseline);
+            await RebuildAsync(discardEdits: true, baseline, revisionAtStart);
         }
         catch (ToolException ex)
         {
             SetStatus(ex);
+            NoteNotArrived();
+        }
+        catch (Exception ex) when (PixelOps.IsAllocationFailure(ex))
+        {
+            // Too little memory for the pictures: said with the remedy, not as the runtime's
+            // English sentence (which is kept, a native failure having other possible causes)
+            SetStatus("status.outOfMemory", ex.Message);
+            NoteNotArrived();
         }
         catch (Exception ex)
         {
             SetStatus("status.loadFailed", ex);
+            NoteNotArrived();
         }
         finally
         {
+            _loadsInFlight--;
+
             // Only the newest load may put the indicator out, for the same reason the conversion
             // checks its own number: a superseded load finishing first would report "done" while
             // the one that replaced it is still running.
@@ -936,6 +1121,161 @@ public sealed partial class MainViewModel : ObservableObject
     public Func<Task<bool>>? AskWhetherToDiscardEdits { get; set; }
 
     /// <summary>
+    /// Loads a picture for the side-facing frames.
+    ///
+    /// Kept apart from the front picture on purpose: it is optional, it never opens as a
+    /// finished sheet, and losing it costs nothing that cannot be reloaded - so none of the
+    /// questions the front picture has to ask apply here.
+    /// </summary>
+    public Task LoadSideImageAsync(string path) => LoadFacingAsync(path, side: true);
+
+    /// <summary>Loads a picture for the back-facing frames.</summary>
+    public Task LoadBackImageAsync(string path) => LoadFacingAsync(path, side: false);
+
+    /// <summary>Goes back to using the front picture for the side-facing frames.</summary>
+    public Task ClearSideImageAsync() => LoadFacingAsync(null, side: true);
+
+    /// <summary>Goes back to using the front picture for the back-facing frames.</summary>
+    public Task ClearBackImageAsync() => LoadFacingAsync(null, side: false);
+
+    /// <summary>
+    /// Swaps in - or removes - one of the optional facings and converts again.
+    ///
+    /// The swap happens under the build gate for the same reason the front picture's does: a
+    /// conversion on a worker thread is reading these bitmaps, and freeing one underneath it
+    /// would pull the pixel buffer out from under SkiaSharp.
+    /// </summary>
+    private async Task LoadFacingAsync(string? path, bool side)
+    {
+        // Watched, not raised. Opening a finished sheet frees these two bitmaps under the gate,
+        // and a facing still being decoded would otherwise take the gate afterwards and put one
+        // back - the panel is disabled in that state, so the file could not be removed again,
+        // and the next ordinary picture opened would silently be built with a facing nobody
+        // asked for. Reading the number is enough to catch that.
+        //
+        // Raising it as well called off whatever the front picture was doing. Clearing a facing
+        // while a large picture was still being opened threw that picture away without a word,
+        // leaving the previous picture's success message on screen: measured at 270ms for a
+        // 4000x4000 decode, and longer again while a conversion holds the gate. Ordering these
+        // loads after the front picture's was never the point - not landing on top of one was.
+        int load = _loadVersion;
+
+        // Each facing orders itself against its own loads only, so two files dropped on the same
+        // button still replace each other and neither facing disturbs the other.
+        int facingLoad = side ? ++_sideVersion : ++_backVersion;
+
+        // Left behind either by a newer load of this facing, or by whatever replaces the front
+        // picture - opening a sheet and choosing a preset both free these bitmaps.
+        bool Superseded() =>
+            load != _loadVersion || facingLoad != (side ? _sideVersion : _backVersion);
+
+        SKBitmap? decoded = null;
+        bool complete = true;
+        bool busy = false;
+
+        // Counted for "Apply to game" and "Save", which wait until nothing is on its way in
+        _loadsInFlight++;
+
+        try
+        {
+            if (path is { Length: > 0 })
+            {
+                IsBusy = true;
+                busy = true;
+
+                (decoded, complete) = await Task.Run(() =>
+                {
+                    SKBitmap bitmap = PixelOps.Decode(path, out bool readWhole);
+                    return (bitmap, readWhole);
+                });
+
+                if (Superseded())
+                {
+                    decoded.Dispose();
+                    return;
+                }
+            }
+
+            await _buildGate.WaitAsync();
+            try
+            {
+                // Checked again with the gate held: waiting for it can take as long as a
+                // conversion, and a sheet may have been opened in the meantime.
+                if (Superseded())
+                {
+                    decoded?.Dispose();
+                    return;
+                }
+
+                // The truncation is remembered with the picture, here where it is known to be put
+                // in use - the rule the front picture follows. Clearing a facing hands no picture
+                // over, which puts its warning away too.
+                if (side)
+                {
+                    _sideImage?.Dispose();
+                    _sideImage = decoded;
+                    _sidePath = path;
+                    _sideTruncated = decoded is not null && !complete;
+                }
+                else
+                {
+                    _backImage?.Dispose();
+                    _backImage = decoded;
+                    _backPath = path;
+                    _backTruncated = decoded is not null && !complete;
+                }
+
+                // Taken over by the field above, so the failure path below must not free it
+                decoded = null;
+            }
+            finally
+            {
+                _buildGate.Release();
+            }
+
+            OnPropertyChanged(side ? nameof(HasSideImage) : nameof(HasBackImage));
+            OnPropertyChanged(side ? nameof(SideImageLabel) : nameof(BackImageLabel));
+
+            // A half-written file is worth saying here for the same reason it is for the front
+            // picture: the missing part decodes transparent, the conversion trims to what
+            // survived and scales it up to fill the frame, and the result looks deliberate. It
+            // shows up as one facing's frames holding a different, larger character.
+            SetStatus(
+                path is { Length: > 0 }
+                    ? complete
+                        ? (side ? "status.sideLoaded" : "status.backLoaded")
+                        : (side ? "status.sideLoadedTruncated" : "status.backLoadedTruncated")
+                    : (side ? "status.sideCleared" : "status.backCleared"));
+
+            RequestRebuild();
+        }
+        catch (Exception ex) when (PixelOps.IsAllocationFailure(ex))
+        {
+            decoded?.Dispose();
+            SetStatus("status.outOfMemory", ex.Message);
+            NoteNotArrived();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            decoded?.Dispose();
+            SetStatus("status.loadFailed", ex);
+            NoteNotArrived();
+        }
+        finally
+        {
+            _loadsInFlight--;
+
+            // Only the newest load may put the indicator out, and only if it turned it on. A
+            // clear takes no decode and finishes at once, so without this it reported "done"
+            // over a picture that was still being opened.
+            if (busy && !Superseded())
+            {
+                IsBusy = false;
+            }
+        }
+    }
+
+    /// <summary>
     /// Whether to take a sheet-sized file as a finished sheet.
     ///
     /// The size on its own was enough to decide, and for everything this program saves it is
@@ -964,7 +1304,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private async Task LoadAsSheetAsync(
         SKBitmap sheet, string path, bool complete, int load,
-        (EditorDocument? Document, bool Edited) baseline)
+        (EditorDocument? Document, bool Edited) baseline, long revisionAtStart)
     {
         try
         {
@@ -974,6 +1314,19 @@ public sealed partial class MainViewModel : ObservableObject
             // drawn in the meantime as already agreed to.
             EditorDocument? documentAtStart = baseline.Document;
             bool editedAtStart = baseline.Edited;
+
+            // Taken again for the same reason as in LoadImageAsync: a conversion of the previous
+            // picture that published during the decode or the question is not the user's doing,
+            // whether or not there was drawing when the file was chosen. Done before the supersede
+            // below, after which no conversion can publish, so from here only drawing can change
+            // the document - and with the reading now "not edited", drawing on the new document
+            // is what the check under the gate catches.
+            if (!WouldDiscardEdits && !ReferenceEquals(Document, documentAtStart))
+            {
+                documentAtStart = Document;
+                editedAtStart = false;
+                revisionAtStart = Document?.Revision ?? 0;
+            }
 
             SupersedePendingBuild();
 
@@ -1003,21 +1356,44 @@ public sealed partial class MainViewModel : ObservableObject
 
                 // Drawn on since this started, or the document swapped out from under it. The
                 // second condition applies even when edits were already to be discarded: that
-                // permission covered the picture as it stood when the file was chosen.
+                // permission covered the picture as it stood when the file was chosen. The third
+                // is the same for a document that was already edited then, where only the
+                // revision can tell further drawing apart; once undone back to nothing to lose,
+                // WouldDiscardEdits is false and there is no reason to decline.
                 if (!ReferenceEquals(Document, documentAtStart)
-                    || (!editedAtStart && WouldDiscardEdits))
+                    || (!editedAtStart && WouldDiscardEdits)
+                    || (WouldDiscardEdits && Document?.Revision != revisionAtStart))
                 {
                     SetStatus("status.loadCancelledByEdits");
+                    NoteNotArrived();
                     return;
                 }
 
                 _sourceImage?.Dispose();
                 _sourceImage = null;
+
+                // A finished sheet is edited as it is, so there is no conversion for the other
+                // facings to take part in. Holding them would keep two pictures alive for a panel
+                // that is now disabled, and leave them waiting to be applied to whatever picture
+                // is opened next.
+                _sideImage?.Dispose();
+                _sideImage = null;
+                _sidePath = null;
+                _sideTruncated = false;
+                _backImage?.Dispose();
+                _backImage = null;
+                _backPath = null;
+                _backTruncated = false;
             }
             finally
             {
                 _buildGate.Release();
             }
+
+            OnPropertyChanged(nameof(HasSideImage));
+            OnPropertyChanged(nameof(HasBackImage));
+            OnPropertyChanged(nameof(SideImageLabel));
+            OnPropertyChanged(nameof(BackImageLabel));
 
             _truncatedSource = false;
             SourceWasTruncated = !complete;
@@ -1046,6 +1422,7 @@ public sealed partial class MainViewModel : ObservableObject
         catch (ToolException ex)
         {
             SetStatus(ex);
+            NoteNotArrived();
         }
         finally
         {
@@ -1085,6 +1462,7 @@ public sealed partial class MainViewModel : ObservableObject
 
             _settingsChangedSinceBuild = true;
             SetStatus("status.needRegenerate");
+            NoteNotArrived();
             OnPropertyChanged(nameof(NeedsRegenerate));
             return;
         }
@@ -1116,6 +1494,11 @@ public sealed partial class MainViewModel : ObservableObject
             previous.Dispose();
         }
 
+        // Counted from here until the conversion it starts has finished, for "Apply to game" and
+        // "Save", which wait for it. _pending alone leaves a gap: it is cleared below on a worker
+        // thread before the conversion is dispatched and takes the gate.
+        Interlocked.Increment(ref _rebuildRequestsInFlight);
+
         // No token is passed to Task.Run on purpose: with one, an already-cancelled token would
         // skip the delegate entirely.
         _ = Task.Run(async () =>
@@ -1123,6 +1506,24 @@ public sealed partial class MainViewModel : ObservableObject
             try
             {
                 await Task.Delay(120, token);
+
+                // No longer queued: the wait is over and the conversion is about to run. Left in
+                // place, _pending still names this finished request, and CancelPending answers
+                // "a conversion really was queued" for it - which is the one thing
+                // SupersedePendingBuild uses to decide that a settings change is outstanding.
+                // Choosing a preset after any settings change had been honoured therefore put
+                // "apply the settings and rebuild" back on screen, and pressing it replaced the
+                // preset and everything drawn over it with a conversion of the old picture,
+                // undo stack included. The guard below was written for exactly that and could
+                // not hold while this stayed set.
+                //
+                // Compare-and-swap, because a later request may already own the field: if it
+                // does, that request disposes this source itself and this must not touch it.
+                if (Interlocked.CompareExchange(ref _pending, null, cts) == cts)
+                {
+                    cts.Dispose();
+                }
+
                 await Dispatcher.UIThread.InvokeAsync(() => RebuildAsync(discardEdits: false));
             }
             catch (OperationCanceledException)
@@ -1132,6 +1533,10 @@ public sealed partial class MainViewModel : ObservableObject
             catch (ObjectDisposedException)
             {
                 // The source was replaced and disposed while this task was waiting on it
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _rebuildRequestsInFlight);
             }
         });
     }
@@ -1149,6 +1554,56 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>Whether the picture currently loaded could only be read in part.</summary>
     private bool _truncatedSource;
+
+    /// <summary>
+    /// Whether the right-facing and back-facing pictures in use could only be read in part.
+    ///
+    /// Said on every conversion, as the front's is. Said only when the picture was loaded, the
+    /// warning lasted until the conversion that load asks for finished - about 140ms - and not at
+    /// all when something had been drawn, since the refusal to rebuild wrote over it at once. The
+    /// facing's frames then held what survived scaled up to fill them, with nothing on screen to
+    /// say why, while the command line warns about the same file.
+    /// </summary>
+    private bool _sideTruncated;
+
+    /// <inheritdoc cref="_sideTruncated"/>
+    private bool _backTruncated;
+
+    /// <summary>
+    /// The sentence naming a facing as what was cut off, or empty when that is not the case.
+    ///
+    /// Only the front is fitted into the box; the other facings are scaled to the height it reached
+    /// and nothing caps their width, so a picture wider in proportion than the front runs past the
+    /// frame. The summary said only how many pixels were cut off, beside numbers that are the
+    /// front's and fit, and the note there about a narrow source is about the front too: following
+    /// it changed nothing, and neither did any setting in the window.
+    ///
+    /// Said of a facing only when that facing's own frames lost pixels at the sides. A facing a
+    /// little wider than the box still fits its frame, and what a vertical offset then cuts off is
+    /// the offset's doing: going by the overall count, which is one maximum over every frame, the
+    /// note named the facing's width for it and sent the user to change the wrong picture.
+    /// </summary>
+    internal static string WideFacingNote(
+        (int Width, int Height)? right, int rightClippedSideways,
+        (int Width, int Height)? up, int upClippedSideways,
+        int boxWidth)
+    {
+        List<string> over = [];
+
+        if (right is { } rightSize && rightSize.Width > boxWidth && rightClippedSideways > 0)
+        {
+            over.Add(Loc.Instance.Format("status.facingWideRight", rightSize.Width));
+        }
+
+        if (up is { } upSize && upSize.Width > boxWidth && upClippedSideways > 0)
+        {
+            over.Add(Loc.Instance.Format("status.facingWideBack", upSize.Width));
+        }
+
+        return over.Count == 0
+            ? string.Empty
+            : Loc.Instance.Format("status.facingWide", string.Join(" / ", over), boxWidth);
+    }
 
     /// <summary>
     /// Whether whatever is on screen came from a file that stopped part-way through.
@@ -1253,8 +1708,13 @@ public sealed partial class MainViewModel : ObservableObject
     /// both of which happen ahead of this call and both of which the canvas stays live through:
     /// read here instead, anything drawn in between counts as already agreed to.
     /// </param>
+    /// <param name="revisionAtStart">
+    /// The document's revision taken with <paramref name="baseline"/>, for the same reason; when
+    /// left out, the revision now.
+    /// </param>
     private async Task RebuildAsync(
-        bool discardEdits, (EditorDocument? Document, bool Edited)? baseline = null)
+        bool discardEdits, (EditorDocument? Document, bool Edited)? baseline = null,
+        long? revisionAtStart = null)
     {
         if (_sourceImage is null)
         {
@@ -1270,6 +1730,7 @@ public sealed partial class MainViewModel : ObservableObject
             // was then dropped with no way in the window to apply it.
             _settingsChangedSinceBuild = true;
             SetStatus("status.needRegenerate");
+            NoteNotArrived();
             OnPropertyChanged(nameof(NeedsRegenerate));
             return;
         }
@@ -1283,6 +1744,10 @@ public sealed partial class MainViewModel : ObservableObject
         // dialog was still on screen waiting for an answer.
         EditorDocument? documentAtStart = baseline?.Document ?? Document;
         bool editedAtStart = baseline?.Edited ?? WouldDiscardEdits;
+
+        // A document already edited at the start stays IsModified however much more is drawn on
+        // it, so drawing during the conversion is told by the revision instead
+        long revisionAtStartValue = revisionAtStart ?? Document?.Revision ?? 0;
 
         IsBusy = true;
 
@@ -1302,16 +1767,24 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             SkinOptions options = BuildOptions();
-            SkinBuildResult built = await Task.Run(() => SkinPipeline.Build(source, _layout, options));
+
+            // Read with the gate held, so the conversion sees the set of pictures as one state
+            SkinSources sources = new(source, _sideImage, _backImage);
+            SkinBuildResult built = await Task.Run(() => SkinPipeline.Build(sources, _layout, options));
 
             // Re-checked here, not just on entry: the conversion runs on a worker thread and the
             // canvas stays live throughout, so the user can have drawn something in the meantime.
             // Publishing now would replace their work along with its undo history.
             // Drawn on since this started, or the document swapped out from under it. The second
             // condition applies even when edits were to be discarded: that permission covered
-            // the picture as it stood when the request was made.
+            // the picture as it stood when the request was made. The third is the same for a
+            // document that was already edited then - the usual case for that permission - where
+            // only the revision can tell further drawing apart. Drawn and then undone back to
+            // nothing to lose, WouldDiscardEdits is false and there is nothing to protect. An undo
+            // and a redo in between count as a change too, which declines on the safe side.
             bool editedSinceStart =
-                !ReferenceEquals(Document, documentAtStart) || (!editedAtStart && WouldDiscardEdits);
+                !ReferenceEquals(Document, documentAtStart) || (!editedAtStart && WouldDiscardEdits)
+                || (WouldDiscardEdits && Document?.Revision != revisionAtStartValue);
 
             if (version != _buildVersion || editedSinceStart || (!discardEdits && WouldDiscardEdits))
             {
@@ -1339,6 +1812,7 @@ public sealed partial class MainViewModel : ObservableObject
                     // button, so the button has to be there to press.
                     _settingsChangedSinceBuild = true;
                     SetStatus("status.needRegenerate");
+                    NoteNotArrived();
                     OnPropertyChanged(nameof(NeedsRegenerate));
                 }
 
@@ -1348,6 +1822,24 @@ public sealed partial class MainViewModel : ObservableObject
             using (built.Sheet)
             {
                 Document = new EditorDocument(built.Sheet, _layout);
+            }
+
+            // The sheet just published was built from the settings read when this started. A
+            // change made while it ran over a drawing the user had agreed to lose was refused by
+            // RequestRebuild, because the old document was still edited, and publishing then left
+            // an unedited sheet in the old settings with NeedsRegenerate false and the summary over
+            // the message - the sheet silently disagreeing with the panel. So that change is asked
+            // for again now, over a document that no longer refuses it. Built from the current
+            // settings, on the other hand, the sheet leaves nothing outstanding, whatever was
+            // refused before: left raised, the flag brought "rebuild from settings" back after one
+            // pixel was drawn, for settings already applied.
+            if (BuildOptions() == options)
+            {
+                _settingsChangedSinceBuild = false;
+            }
+            else
+            {
+                RequestRebuild();
             }
 
             OnPropertyChanged(nameof(HasSourceImage));
@@ -1366,7 +1858,7 @@ public sealed partial class MainViewModel : ObservableObject
 
             // Copied out of the result before the message is written. The sheet it arrived with
             // is disposed just above, and the message outlives this method so that it can be
-            // written again after a language switch. The three extra sentences are composed
+            // written again after a language switch. The extra sentences are composed
             // inside the message for the same reason: composed here, they would be left behind
             // in the language of the day while the sentence around them changed.
             (int Width, int Height) sourceSize = built.SourceSize;
@@ -1376,6 +1868,14 @@ public sealed partial class MainViewModel : ObservableObject
             int boxWidth = built.BoxSize.Width;
             bool usesLittleOfBox = built.UsesLittleOfBox;
             bool truncatedSource = _truncatedSource;
+            (int Width, int Height)? rightSize = built.RightSize;
+            (int Width, int Height)? upSize = built.UpSize;
+            int rightClippedSideways = built.RightClippedSideways;
+            int upClippedSideways = built.UpClippedSideways;
+
+            // Read with the gate still held, so they describe the facings this conversion used
+            bool sideTruncated = _sideTruncated;
+            bool backTruncated = _backTruncated;
 
             SetStatus(() =>
             {
@@ -1383,12 +1883,20 @@ public sealed partial class MainViewModel : ObservableObject
                     ? Loc.Instance.Format("status.clipped", clippedPixels)
                     : string.Empty;
 
+                // Right after the count it explains. The frame is the same for every facing, so
+                // the count alone cannot say which picture ran past it.
+                string wide = WideFacingNote(rightSize, rightClippedSideways, upSize, upClippedSideways, boxWidth);
+
                 // Said on every conversion of a truncated source, not only on the load, because
                 // the summary line is rewritten each time and the warning would otherwise
-                // disappear the first time a setting changed.
+                // disappear the first time a setting changed. The same goes for the facings.
                 string truncated = truncatedSource
                     ? Loc.Instance["status.sourceTruncated"]
                     : string.Empty;
+
+                string facingTruncated =
+                    (sideTruncated ? Loc.Instance["status.sideTruncated"] : string.Empty)
+                    + (backTruncated ? Loc.Instance["status.backTruncated"] : string.Empty);
 
                 // The art keeps its aspect ratio, so a tall narrow source leaves columns of the
                 // frame empty - detail that could have been kept. Nothing here can recover it,
@@ -1402,16 +1910,25 @@ public sealed partial class MainViewModel : ObservableObject
                     sourceSize.Width, sourceSize.Height,
                     trimmedSize.Width, trimmedSize.Height,
                     spriteSize.Width, spriteSize.Height,
-                    clipped) + truncated + narrow;
+                    clipped) + wide + truncated + facingTruncated + narrow;
             });
         }
         catch (ToolException ex)
         {
             SetStatus(ex);
+            NoteNotArrived();
+        }
+        catch (Exception ex) when (PixelOps.IsAllocationFailure(ex))
+        {
+            // Large pictures in all three slots can need several gigabytes; when they are not there
+            // the remedy - smaller pictures, or fewer - is what has to be said
+            SetStatus("status.outOfMemory", ex.Message);
+            NoteNotArrived();
         }
         catch (Exception ex)
         {
             SetStatus("status.convertFailed", ex);
+            NoteNotArrived();
         }
         finally
         {
@@ -1466,6 +1983,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
 
         CancelShape();
+        _shapeCalledOff = false;
 
         Document?.EndChange();
         NotifyHistoryChanged();
@@ -1474,6 +1992,26 @@ public sealed partial class MainViewModel : ObservableObject
         // stroke, and recounting them is dearer than everything else a pixel costs put together.
         RefreshPalette();
     }
+
+    /// <summary>
+    /// Calls off a line or rectangle being dragged, for Escape and for the other button. Returns
+    /// whether there was one. The stroke itself goes on until the button comes up, and then writes
+    /// nothing.
+    /// </summary>
+    public bool CancelShapeInProgress()
+    {
+        if (_dragOrigin is null)
+        {
+            return false;
+        }
+
+        CancelShape();
+        _shapeCalledOff = true;
+        return true;
+    }
+
+    /// <summary>Whether the stroke under way had its shape called off, so it writes nothing more.</summary>
+    private bool _shapeCalledOff;
 
     /// <summary>Forgets the shape in progress, so nothing is written when the button comes up.</summary>
     private void CancelShape()
@@ -1652,12 +2190,26 @@ public sealed partial class MainViewModel : ObservableObject
 
         EditScope scope = EditAllFrames ? EditScope.AllFrames : EditScope.SingleFrame;
 
+        // A shape called off part-way - Escape, or the other button - leaves the rest of its
+        // stroke doing nothing. With its origin gone, the shape tools painted freehand along the
+        // remaining drag instead.
+        if (isStart)
+        {
+            _shapeCalledOff = false;
+        }
+        else if (_shapeCalledOff)
+        {
+            return;
+        }
+
         // The right button erases outright, so the shape and colour tools step aside for it
         if (erase)
         {
-            // Pressing the other button part-way through a shape means "not that after all",
-            // which is what it does everywhere else. Leaving the shape pending would write it
-            // as well the moment either button came up, on top of what was just erased.
+            // A shape still pending from before is dropped, or it would be written as well the
+            // moment the button came up, on top of what was just erased. (The other button pressed
+            // part-way through a stroke does not reach here - the canvas keeps a stroke to the
+            // button that began it - but calls a shape off through CancelShapeInProgress, as
+            // Escape does.)
             CancelShape();
 
             if (isStart)
@@ -1729,6 +2281,16 @@ public sealed partial class MainViewModel : ObservableObject
                 if (isStart)
                 {
                     SKColor picked = document.GetPixel(x, y);
+
+                    // A fully transparent pixel - a click one pixel off the outline, at a low
+                    // zoom - is no colour to paint with. Taken as one, the pen then erased, over
+                    // every frame by default, and all the user was told was "#00000000".
+                    if (picked.Alpha == 0)
+                    {
+                        SetStatus("status.colorPickedTransparent");
+                        return;
+                    }
+
                     // Opacity kept, so picking a half-transparent pixel and painting with it
                     // gives back what was picked rather than an opaque version of it.
                     PenColor = Describe(picked);
@@ -1765,10 +2327,17 @@ public sealed partial class MainViewModel : ObservableObject
                 // Said only when nothing happened. A fill that works is visible on the canvas and
                 // needs no sentence, but one that finds the area already this colour changed
                 // nothing and left the previous message standing - which reads as if it worked.
-                if (document.Fill(x, y, fillColor, scope) == 0)
+                if (document.Fill(x, y, fillColor, scope, out int skippedFrames) == 0)
                 {
                     SetStatus("status.fillNothing");
                 }
+                else if (skippedFrames > 0)
+                {
+                    // Over every frame, the frames where the clicked spot holds another colour
+                    // are left alone - their art differs - and that happens out of sight
+                    SetStatus("status.fillSkippedFrames", skippedFrames);
+                }
+
                 break;
 
             case EditorTool.Eraser:
@@ -2068,6 +2637,185 @@ public sealed partial class MainViewModel : ObservableObject
 
     // ------------------------------------------------------------ Output
 
+    /// <summary>
+    /// Whether two paths name the same file, compared the way the command line compares its input
+    /// and output (EnsureDifferentFiles): fully resolved, links followed, case ignored.
+    ///
+    /// A path that cannot be resolved counts as different. The write that follows fails on it
+    /// with its own message, which says more than a refusal made up here could.
+    /// </summary>
+    internal static bool PointsAtSameFile(string first, string second)
+    {
+        try
+        {
+            return string.Equals(
+                PathSafety.Normalize(first), PathSafety.Normalize(second), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException
+                                       or IOException or UnauthorizedAccessException
+                                       or System.Security.SecurityException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Whether a write failed because another program has the file open
+    /// (ERROR_SHARING_VIOLATION or ERROR_LOCK_VIOLATION).
+    ///
+    /// The save dialog hands such a file back without a word, and the write opens it for itself
+    /// alone, so any other program holding it open - an image viewer, an editor - refuses it.
+    /// </summary>
+    internal static bool IsSharingViolation(IOException exception) =>
+        (exception.HResult & 0xFFFF) is 32 or 33;
+
+    /// <summary>
+    /// The pictures a conversion is being made from, which saving over would lose.
+    ///
+    /// Only while each is held as a source. A finished sheet opened as it is leaves the source
+    /// picture unset and its path in SourcePath, and saving it back where it came from is how the
+    /// help says to carry on with the work - comparing SourcePath on its own refused exactly that.
+    /// </summary>
+    private IEnumerable<string> HeldSourcePaths()
+    {
+        if (_sourceImage is not null && SourcePath is { Length: > 0 } source)
+        {
+            yield return source;
+        }
+
+        if (_sideImage is not null && _sidePath is { Length: > 0 } sidePath)
+        {
+            yield return sidePath;
+        }
+
+        if (_backImage is not null && _backPath is { Length: > 0 } backPath)
+        {
+            yield return backPath;
+        }
+    }
+
+    /// <summary>
+    /// Whether the picture on screen is still about to change: a conversion is queued (the 120 ms
+    /// a settings change waits) or running, or a picture is being loaded.
+    ///
+    /// Read only from markers that always clear themselves - the requests and the loads count down
+    /// in finally and the gate is released in finally - and not from IsBusy, which a single slip
+    /// would leave set and with it every press of "Apply to game" waiting for good.
+    /// </summary>
+    private bool ConversionInFlight
+    {
+        get
+        {
+            return Volatile.Read(ref _rebuildRequestsInFlight) > 0
+                   || _buildGate.CurrentCount == 0
+                   || _loadsInFlight > 0;
+        }
+    }
+
+    /// <summary>
+    /// Waits for the picture on screen to settle.
+    ///
+    /// Polled, because there is no one thing to await: a load asks for a conversion when it is
+    /// done, and a setting changed while waiting queues another. Short enough not to be felt; a
+    /// large picture keeps it waiting for as long as its conversion takes, which is the point.
+    /// </summary>
+    private async Task WaitUntilSettledAsync()
+    {
+        if (!ConversionInFlight)
+        {
+            return;
+        }
+
+        SetStatus("status.waitingForConversion");
+        while (ConversionInFlight)
+        {
+            await Task.Delay(30);
+        }
+    }
+
+    /// <summary>
+    /// Marks the message just written as the reason a picture on its way in did not arrive, for a
+    /// button waiting for that picture (see <see cref="NotArrivedSince"/>).
+    /// </summary>
+    private void NoteNotArrived()
+    {
+        _picturesNotArrived++;
+
+        // Kept the way the line was written, so it follows a language switch as the line does.
+        // SetStatus always leaves one; the text stands in should it ever not.
+        string said = Status;
+        _whyNotArrived = _statusRecipe ?? (() => said);
+    }
+
+    /// <summary>
+    /// What was said about a picture that did not arrive after <paramref name="mark"/> was read
+    /// from <see cref="_picturesNotArrived"/>, or null when every one that was on its way arrived.
+    /// </summary>
+    private Func<string>? NotArrivedSince(int mark) => _picturesNotArrived == mark ? null : _whyNotArrived;
+
+    /// <summary>
+    /// "Apply to game" as the button does it: after whatever conversion or load is on its way.
+    ///
+    /// Written at the press, the document was the one before a settings change still waiting its
+    /// 120 ms, or before a conversion or a load that was running: the game got the previous
+    /// picture, the screen turned into the new one a moment later, and the conversion's summary
+    /// wrote over the "applied" message (measured for every import setting, for a large load of 2
+    /// to 3 seconds, and for a right-facing or back picture just put in).
+    /// </summary>
+    public async Task InstallToGameWhenSettledAsync()
+    {
+        int mark = _picturesNotArrived;
+        await WaitUntilSettledAsync();
+
+        // Not written when what it waited for did not come. The game got the picture from before
+        // under "applied", and the message saying why the new one had not come - a file that could
+        // not be read, too little memory, the rebuild refused over a drawing - was gone (the final
+        // review of 2026-10-02). That message stays, and says nothing was applied.
+        if (NotArrivedSince(mark) is { } why)
+        {
+            SetStatus(() => why() + Loc.Instance["status.notAppliedAfterWait"]);
+            return;
+        }
+
+        InstallToGame();
+    }
+
+    /// <summary>"Save" as the button does it: after whatever conversion or load is on its way.</summary>
+    public async Task SaveWhenSettledAsync(string path)
+    {
+        int mark = _picturesNotArrived;
+        await WaitUntilSettledAsync();
+
+        // Not written when what it waited for did not come, as "Apply to game" is not
+        if (NotArrivedSince(mark) is { } why)
+        {
+            SetStatus(() => why() + Loc.Instance["status.notSavedAfterWait"]);
+            return;
+        }
+
+        Save(path);
+    }
+
+    /// <summary>
+    /// "Remove from characters" as the button does it, after the conversion on its way. The removal
+    /// does not depend on the picture; its message did: pressed during a conversion, it was written
+    /// over by the conversion's summary the moment that finished.
+    /// </summary>
+    public async Task RemoveFromCharactersWhenSettledAsync(IReadOnlyList<string> guids)
+    {
+        int mark = _picturesNotArrived;
+        await WaitUntilSettledAsync();
+        RemoveFromCharacters(guids);
+
+        // Done whatever became of the picture, which the removal does not use - and the user
+        // confirmed it for these characters. Why the picture did not come is said after the
+        // removal's report rather than lost under it.
+        if (NotArrivedSince(mark) is { } why && _statusRecipe is { } removed)
+        {
+            SetStatus(() => removed() + "\n" + why());
+        }
+    }
+
     public void Save(string path)
     {
         if (Document is not { } document)
@@ -2076,11 +2824,27 @@ public sealed partial class MainViewModel : ObservableObject
             return;
         }
 
+        // Never onto a picture the sheet is being made from. The operating system asks only
+        // whether to replace "a file", and once replaced the picture is gone: the conversion goes on
+        // from the copy in memory, so nothing shows the loss until the file is opened again - as a
+        // finished sheet, with the import settings out of reach. The command line refuses the same.
+        if (HeldSourcePaths().Any(source => PointsAtSameFile(source, path)))
+        {
+            SetStatus("status.saveOverSource", path);
+            return;
+        }
+
         try
         {
             using SKBitmap sheet = document.ToBitmap();
             PixelOps.EncodePng(sheet, path);
             SetStatus("status.saved", path);
+        }
+        catch (IOException ex) when (IsSharingViolation(ex))
+        {
+            // Said in the window's language with what to do about it. The runtime's own sentence
+            // is English whatever the window's language, and names no way out.
+            SetStatus("status.saveFailedInUse", path);
         }
         catch (Exception ex)
         {
@@ -2140,10 +2904,13 @@ public sealed partial class MainViewModel : ObservableObject
                 SyncInstalledState(location);
             }
 
+            // Taken now, as note is, so that switching language rewrites the same message
+            Func<string> missing = ModMissingNote();
+
             SetStatus(() => Loc.Instance.Format(
                 "status.installedCharacters",
                 targets.Count,
-                string.Join(" / ", targets.Select(c => c.Display))) + note());
+                string.Join(" / ", targets.Select(c => c.Display))) + note() + missing());
         }
         catch (ToolException ex)
         {
@@ -2319,7 +3086,7 @@ public sealed partial class MainViewModel : ObservableObject
         int count = candidates.Count;
         string chosen = candidates[0].Describe();
 
-        // FindModConfigLocations returns them most recently modified first
+        // FindModConfigLocations returns them with the one the game started with last first
         note = () => Environment.NewLine
                      + Loc.Instance.Format("status.multipleConfigs", count, chosen);
         return candidates[0];
@@ -2349,11 +3116,15 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Installing needs both a picture to install and somebody to install it for.</summary>
     public bool CanInstallToGame => HasDocument && HasSelectedCharacters;
 
-    /// <summary>The state of the save folders as of the last scan.</summary>
+    /// <summary>
+    /// What the list was read from as of the last scan: the mods folder it went through and the
+    /// state of the save folders (see <see cref="CharactersFingerprint"/>).
+    /// </summary>
     private string _charactersFingerprint = string.Empty;
 
     /// <summary>
-    /// Re-reads the characters only when the game's save folders have actually changed.
+    /// Re-reads the characters only when the game's save folders have actually changed, or the
+    /// mods folder the window would now apply to is not the one the list was read through.
     ///
     /// Called whenever the window regains focus, which is what happens when the user creates a
     /// character in the game and switches back. Without it the list would only ever be as
@@ -2364,7 +3135,9 @@ public sealed partial class MainViewModel : ObservableObject
         string fingerprint;
         try
         {
-            fingerprint = CharacterLocator.Fingerprint();
+            IReadOnlyList<ModConfigLocation> candidates = GameLocator.FindModConfigLocations();
+            fingerprint = CharactersFingerprint(
+                candidates.Count > 0 ? candidates[0] : null, CharacterLocator.Fingerprint());
         }
         catch (Exception)
         {
@@ -2377,6 +3150,19 @@ public sealed partial class MainViewModel : ObservableObject
             RefreshCharacters();
         }
     }
+
+    /// <summary>
+    /// What the character list was read from: the mods folder it went through ("-" for none, when
+    /// every account's characters are listed) and the state of the save folders.
+    ///
+    /// The save folders alone were not enough. Applying, removing, fetching and the gear toggle
+    /// choose the most recently used mods folder again when pressed, and which one that is follows
+    /// the README.txt the game rewrites at every start. Starting the game with another Steam
+    /// account and coming back without saving left the list showing the first account while
+    /// "Apply to game" wrote into the second one's folder.
+    /// </summary>
+    internal static string CharactersFingerprint(ModConfigLocation? location, string savesFingerprint) =>
+        $"{location?.ModsDirectory ?? "-"}>{savesFingerprint}";
 
     /// <summary>
     /// Re-reads the characters from the game's save folder and which of them have an image.
@@ -2428,7 +3214,7 @@ public sealed partial class MainViewModel : ObservableObject
             }
 
             // Only now, with a complete list in hand, does this state count as current
-            _charactersFingerprint = CharacterLocator.Fingerprint();
+            _charactersFingerprint = CharactersFingerprint(location, CharacterLocator.Fingerprint());
         }
         catch (Exception ex)
         {
@@ -2504,17 +3290,56 @@ public sealed partial class MainViewModel : ObservableObject
             ModConfigWriter.SetGearHidden(
                 location.ModsDirectory, SheetInstaller.DefaultModFolderName, hide: !value);
 
-            SetStatus(() => Loc.Instance[value ? "status.gearShown" : "status.gearHidden"] + note());
+            Func<string> missing = ModMissingNote();
+            SetStatus(() => Loc.Instance[value ? "status.gearShown" : "status.gearHidden"] + note() + missing());
         }
         catch (ToolException ex)
         {
             SetStatus(ex);
+            RevertGearToggle(value);
         }
         catch (Exception ex)
         {
             SetStatus("status.gearFailed", ex);
+            RevertGearToggle(value);
         }
     }
+
+    /// <summary>
+    /// Puts the toggle back after a write that did not go through.
+    ///
+    /// Left on the new value, the pill said the gear showed over settings that still hid it, and
+    /// the message for a write that stopped part way - running it again switches the rest - held
+    /// only if pressing again asked for the same thing: with the pill already on the new value,
+    /// the next press asked for the opposite.
+    ///
+    /// Posted rather than set here. This runs inside the binding's write-back from the click, and
+    /// measured on Avalonia 12 the ToggleButton does not take a value changed at that moment: the
+    /// view model went back, the pill stayed pressed, and the next click set the value it already
+    /// had and wrote nothing. Not read back from disk either: after a partial write the four
+    /// settings disagree, IsGearHidden answers "shown" for that, and a retry from there asked for
+    /// "hidden" whichever way the failed press had gone.
+    /// </summary>
+    private void RevertGearToggle(bool attempted) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            // Set by something else in the meantime, such as a refresh bringing it in line with
+            // the disk, which is then the better answer
+            if (ShowGameGear != attempted)
+            {
+                return;
+            }
+
+            _syncingGearSetting = true;
+            try
+            {
+                ShowGameGear = !attempted;
+            }
+            finally
+            {
+                _syncingGearSetting = false;
+            }
+        });
 
     /// <summary>Brings the toggle in line with the setting already written on disk.</summary>
     private void SyncGearSetting()
@@ -2563,6 +3388,22 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isModInstalled;
 
+    /// <summary>
+    /// A line for a message that says a change reaches the game, added when the mod is not in
+    /// the game and nothing there reads the change at all.
+    ///
+    /// "If the game is running it updates within a few seconds" was said whatever the state of
+    /// the mod. The loader of 1.3.0.2 scans the Mods folder once, as the game starts, so even
+    /// after "Install mod" a running game needs a restart. Only when the game was found and the
+    /// mod can be installed: IsModInstalled is also false when the game was not found or its
+    /// state could not be read, and saying "the mod is missing" then would be a guess.
+    /// </summary>
+    private Func<string> ModMissingNote()
+    {
+        bool missing = IsGameFound && CanInstallMod && !IsModInstalled;
+        return () => missing ? Environment.NewLine + Loc.Instance["status.modMissingNote"] : string.Empty;
+    }
+
     /// <summary>Label of the install/remove button, stating what pressing it would do.</summary>
     public string ModButtonLabel =>
         Loc.Instance[IsModInstalled ? "action.removeMod" : "action.installMod"];
@@ -2603,11 +3444,16 @@ public sealed partial class MainViewModel : ObservableObject
             _gamePath = GameLocator.FindGameInstallations(GamePathSettings.Load()).FirstOrDefault();
             IsGameFound = _gamePath is not null;
 
+            // IsModOutdated is lowered with IsModInstalled on every way out, as the catch below
+            // does. These two returned without it, so a game folder that went missing left
+            // "MOD を更新" on screen under ゲームが見つかりません.
             if (_gamePath is null)
             {
                 EnvironmentStatus = Loc.Instance["env.gameNotFound"];
                 CanInstallMod = false;
                 IsModInstalled = false;
+                IsModOutdated = false;
+                ClearModLoadWarning();
                 return;
             }
 
@@ -2617,6 +3463,8 @@ public sealed partial class MainViewModel : ObservableObject
                 EnvironmentStatus = Loc.Instance["env.payloadMissing"];
                 CanInstallMod = false;
                 IsModInstalled = false;
+                IsModOutdated = false;
+                ClearModLoadWarning();
                 return;
             }
 
@@ -2634,6 +3482,9 @@ public sealed partial class MainViewModel : ObservableObject
             EnvironmentStatus = installed.IsInstalled
                 ? Loc.Instance.Format("env.modInstalled", _gamePath)
                 : Loc.Instance.Format("env.modMissing", _gamePath);
+
+            // After IsModOutdated, which decides what the warning tells the user to press
+            UpdateModLoadWarning(installed);
         }
         catch (Exception ex)
         {
@@ -2641,6 +3492,102 @@ public sealed partial class MainViewModel : ObservableObject
             CanInstallMod = false;
             IsModInstalled = false;
             IsModOutdated = false;
+            ClearModLoadWarning();
+        }
+    }
+
+    /// <summary>
+    /// A line under the environment status saying that the game failed to load the mod the last
+    /// time it started, and what to do about it. Empty when it did not, or when that cannot be told.
+    ///
+    /// "MOD 導入済み" was all the bar ever said once the files were in place. The game compiles the
+    /// mod when it starts and checks it against its own rules, a game update can make either fail,
+    /// and the one place that records it is the game's own log, which is what this is read from.
+    /// </summary>
+    [ObservableProperty]
+    private string _modLoadWarning = string.Empty;
+
+    /// <summary>The lines from the game's log behind the warning, shown when the pointer rests on it.</summary>
+    [ObservableProperty]
+    private string _modLoadWarningDetail = string.Empty;
+
+    /// <summary>Whether the warning line is shown.</summary>
+    public bool HasModLoadWarning => ModLoadWarning.Length > 0;
+
+    partial void OnModLoadWarningChanged(string value) => OnPropertyChanged(nameof(HasModLoadWarning));
+
+    /// <summary>The mod the warning was last worked out for; null when none is installed.</summary>
+    private InstalledModInfo? _modLoadChecked;
+
+    /// <summary>The state of the game's log when the warning was last worked out.</summary>
+    private string _modLoadFingerprint = string.Empty;
+
+    /// <summary>Takes the warning down, for every state in which there is no installed mod to warn about.</summary>
+    private void ClearModLoadWarning()
+    {
+        _modLoadChecked = null;
+        _modLoadFingerprint = string.Empty;
+        ModLoadWarning = string.Empty;
+        ModLoadWarningDetail = string.Empty;
+    }
+
+    /// <summary>Asks the game's log whether its last start took the mod, and says so under the status.</summary>
+    private void UpdateModLoadWarning(InstalledModInfo installed)
+    {
+        if (_gamePath is null || !installed.IsInstalled)
+        {
+            ClearModLoadWarning();
+            return;
+        }
+
+        try
+        {
+            // Taken before the log is read, so a line the game writes during the read makes the
+            // next activation read it again rather than be taken for what is already shown
+            _modLoadFingerprint = GameLog.Fingerprint(GameLocator.FindPlayerLog());
+            _modLoadChecked = installed;
+
+            ModLoadVerdict verdict = GameLog.CheckLastRun(_gamePath, installed);
+            (ModLoadWarning, ModLoadWarningDetail) = ModLoadMessages.Describe(verdict, IsModOutdated);
+        }
+        catch (Exception)
+        {
+            // Advice only. Escaping into RefreshEnvironment would turn the whole bar into "could
+            // not check the environment" - and the install button off - over one line of advice
+            // that could not be worked out.
+            ModLoadWarning = string.Empty;
+            ModLoadWarningDetail = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Reads the game's log again when it has changed since it was last read.
+    ///
+    /// Called whenever the window comes back to the front, which is what happens after starting
+    /// the game and watching it refuse the mod. Without it the bar went on saying nothing until
+    /// this application was next started or the mod next installed.
+    /// </summary>
+    public void RefreshModLoadIfChanged()
+    {
+        if (_modLoadChecked is not { } installed)
+        {
+            return;
+        }
+
+        string fingerprint;
+        try
+        {
+            fingerprint = GameLog.Fingerprint(GameLocator.FindPlayerLog());
+        }
+        catch (Exception)
+        {
+            // Cannot tell, so the line keeps what it said, as the character list does
+            return;
+        }
+
+        if (fingerprint != _modLoadFingerprint)
+        {
+            UpdateModLoadWarning(installed);
         }
     }
 
@@ -2762,8 +3709,14 @@ public sealed partial class MainViewModel : ObservableObject
         // Taken before the read, for the same reason the file loader takes it there: anything
         // drawn while the file is being read is not something the user agreed to lose.
         (EditorDocument? Document, bool Edited) baseline = (Document, WouldDiscardEdits);
+        long revisionAtStart = Document?.Revision ?? 0;
 
         IsBusy = true;
+
+        // Counted as a load, as opening a file is: the captured picture is read and composed before
+        // the gate is taken, and "Apply to game" pressed in the meantime wrote the picture from
+        // before while the screen went on to the fetched one
+        _loadsInFlight++;
 
         try
         {
@@ -2799,6 +3752,7 @@ public sealed partial class MainViewModel : ObservableObject
                         : "status.fetchNothingCaptured";
 
                 SetStatus(() => Loc.Instance.Format(reason, choice.Display));
+                NoteNotArrived();
                 return;
             }
 
@@ -2823,25 +3777,40 @@ public sealed partial class MainViewModel : ObservableObject
             // Disposes the sheet itself, and declines the load when the canvas was drawn on in the
             // meantime. It also reports a sheet it cannot use, which is why nothing is claimed here
             // until the path it recorded proves the load went through.
-            await LoadAsSheetAsync(sheet, path, complete: true, load, baseline);
+            await LoadAsSheetAsync(sheet, path, complete: true, load, baseline, revisionAtStart);
 
             if (SourcePath == path)
             {
-                _fetchedFrom = choice.Display;
+                _fetchedFrom = choice;
                 OnPropertyChanged(nameof(SourceDisplay));
-                SetStatus(() => Loc.Instance.Format("status.fetched", choice.Display) + note());
+
+                // A character with a picture applied is never captured again - the mod steps
+                // aside, as the refusal above explains - so what was read is how it looked just
+                // before the picture went on, which can be long ago. Said so rather than
+                // "took the in-game appearance", which a character in the same state but with no
+                // file left is refused as impossible. Asked from the folder, as there.
+                bool applied = CharacterSkins
+                    .InstalledGuids(location.ModsDirectory, SheetInstaller.DefaultModFolderName)
+                    .Contains(choice.Character.Guid);
+                string fetched = applied ? "status.fetchedWhileApplied" : "status.fetched";
+
+                SetStatus(() => Loc.Instance.Format(fetched, choice.Display) + note());
             }
         }
         catch (ToolException ex)
         {
             SetStatus(ex);
+            NoteNotArrived();
         }
         catch (Exception ex)
         {
             SetStatus("status.fetchFailed", ex);
+            NoteNotArrived();
         }
         finally
         {
+            _loadsInFlight--;
+
             // Only the newest request may put the indicator out, as with the file loader
             if (load == _loadVersion)
             {
@@ -2887,9 +3856,33 @@ public sealed partial class MainViewModel : ObservableObject
 
             if (result.Failures.Count > 0)
             {
-                string reasons = string.Join(
-                    " / ", result.Failures.Select(f => $"{Path.GetFileName(f.Path)}: {f.Reason}"));
-                SetStatus("status.uninstallPartial", result.Removed.Count, reasons);
+                // Re-read as a full removal is: part of it did happen, and the bar, the mod
+                // buttons and every character's "適用中" went on describing what was there
+                // before. Re-read first and report after, so that a failed character scan
+                // cannot overwrite the report of the partial removal.
+                RefreshEnvironment();
+
+                // Named as the confirmation dialog names them, with the whole path. Both targets are
+                // called CustomPlayerSkin - the mod in the game folder and its settings in the user's
+                // data - so the last segment alone could not say which one was left, or where.
+                //
+                // Only the kind's key is taken here; its name is looked up inside the message, so a
+                // language switch translates it along with the sentence around it.
+                int removedCount = result.Removed.Count;
+                List<(string? KindKey, string Path, string Reason)> failed = result.Failures.Select(f =>
+                {
+                    RemovalTarget? target = plan.Targets.FirstOrDefault(t => t.Path == f.Path);
+                    string? kindKey = target is null
+                        ? null
+                        : target.Kind == RemovalKind.ModInstall ? "uninstall.kindMod" : "uninstall.kindConfig";
+                    return (kindKey, f.Path, f.Reason);
+                }).ToList();
+
+                SetStatus(() => Loc.Instance.Format(
+                    "status.uninstallPartial",
+                    removedCount,
+                    string.Join(" / ", failed.Select(f =>
+                        $"[{(f.KindKey is null ? Path.GetFileName(f.Path) : Loc.Instance[f.KindKey])}] {f.Path}: {f.Reason}"))));
                 return;
             }
 

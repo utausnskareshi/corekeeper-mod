@@ -111,6 +111,45 @@ public sealed class EditorDocumentTests
     }
 
     [Fact]
+    public void Fill_全コマ指定でも同じ位置が別の色のコマは塗らずに数える()
+    {
+        // The frames facing right or away, sitting or swinging, hold different art, so the spot
+        // clicked in the front frame can be the transparent background there. Each frame's fill
+        // started from whatever colour sat at that spot, so filling the shoes in frame 0 flooded the
+        // whole background of the sitting frames - unseen, with one frame on screen - and the game
+        // then showed a square where the character sits (the test campaign of 2026-10-01).
+        EditorDocument document = CreateDocument();
+        FrameRect clickedFrame = Layout.Frames.Single(f => f.Index == 0);
+        FrameRect sameColour = Layout.Frames.Single(f => f.Index == 1);
+        FrameRect background = Layout.Frames.Single(f => f.Index == 2);
+
+        // A block of white at the same spot in frames 0 and 1; frame 2 has nothing there
+        foreach (FrameRect frame in new[] { clickedFrame, sameColour })
+        {
+            for (int dy = 0; dy < 3; dy++)
+            {
+                for (int dx = 0; dx < 3; dx++)
+                {
+                    document.Paint(frame.X + 5 + dx, frame.YTopLeft + 5 + dy, SKColors.White, EditScope.SingleFrame);
+                }
+            }
+        }
+
+        (int x, int y) = At(0, 6, 6);
+        document.BeginChange();
+        int changed = document.Fill(x, y, SKColors.Red, EditScope.AllFrames, out int skipped);
+
+        Assert.Equal(SKColors.Red, document.GetPixel(clickedFrame.X + 6, clickedFrame.YTopLeft + 6));
+        Assert.Equal(SKColors.Red, document.GetPixel(sameColour.X + 6, sameColour.YTopLeft + 6));
+        Assert.Equal(18, changed);
+
+        // The background there was not flooded, and the frame is counted
+        Assert.Equal(0, document.GetPixel(background.X, background.YTopLeft).Alpha);
+        Assert.Equal(0, document.GetPixel(background.X + 6, background.YTopLeft + 6).Alpha);
+        Assert.Equal(Layout.Frames.Count - 2, skipped);
+    }
+
+    [Fact]
     public void Fill_同じ色を指定しても無限に広がらない()
     {
         EditorDocument document = CreateDocument(SKColors.White);
@@ -688,6 +727,69 @@ public sealed class EditorDocumentTests
     }
 
     /// <summary>
+    /// Trying presets and coming back to the one that was open must not make the drawing
+    /// disposable.
+    ///
+    /// The sheet then matches what was opened again, and IsModified was decided from that alone,
+    /// so it went false - while the drawing was still one undo away on the history. The window
+    /// reads IsModified as "would going on lose the user's work", and with it false the next
+    /// preset built a new document instead of replacing in place, and closing asked nothing:
+    /// either way the history went, and the drawing with it. Wheeling over the dropdown was
+    /// enough to get there.
+    /// </summary>
+    [Fact]
+    public void Replace_元のシートに戻してもまだ失いうる手描きとして扱う()
+    {
+        EditorDocument document = CreateDocument();
+        (int x, int y) = At(0, 3, 3);
+
+        document.BeginChange();
+        document.Paint(x, y, SKColors.Red, EditScope.SingleFrame);
+        document.EndChange();
+
+        using SKBitmap other = PixelOps.CreateEmpty(Layout.Texture.Width, Layout.Texture.Height);
+        SKColor[] otherPixels = other.Pixels;
+        Array.Fill(otherPixels, SKColors.Blue);
+        other.Pixels = otherPixels;
+
+        // What was opened: CreateDocument's own empty sheet
+        using SKBitmap opened = PixelOps.CreateEmpty(Layout.Texture.Width, Layout.Texture.Height);
+
+        document.Replace(other, foldIntoPrevious: true);
+        document.Replace(opened, foldIntoPrevious: true);
+
+        Assert.True(document.IsModified, "履歴に手描きが残っているのに、失うものが無いと判定された");
+
+        Assert.True(document.Undo());
+        Assert.Equal(SKColors.Red, document.GetPixel(x, y));
+    }
+
+    /// <summary>
+    /// The same, reached in one step: choosing the preset that was open, straight after drawing.
+    /// That goes through the path that starts a new step rather than folding into one, and it
+    /// decided the flag from the contents as well.
+    /// </summary>
+    [Fact]
+    public void Replace_描いた直後に元のシートを選んでも手描きを失いうるものとして扱う()
+    {
+        EditorDocument document = CreateDocument();
+        (int x, int y) = At(0, 3, 3);
+
+        document.BeginChange();
+        document.Paint(x, y, SKColors.Red, EditScope.SingleFrame);
+        document.EndChange();
+
+        using SKBitmap opened = PixelOps.CreateEmpty(Layout.Texture.Width, Layout.Texture.Height);
+
+        document.Replace(opened, foldIntoPrevious: true);
+
+        Assert.True(document.IsModified, "履歴に手描きが残っているのに、失うものが無いと判定された");
+
+        Assert.True(document.Undo());
+        Assert.Equal(SKColors.Red, document.GetPixel(x, y));
+    }
+
+    /// <summary>
     /// Painting a pixel and erasing it back by hand leaves the sheet identical to the imported
     /// one, so the import settings must stop warning that edits will be lost - the same answer
     /// undoing gives.
@@ -1225,5 +1327,93 @@ public sealed class EditorDocumentTests
         Assert.Equal(
             EditorDocument.RectanglePixels(1, 1, 4, 3, filled: true),
             EditorDocument.RectanglePixels(4, 3, 1, 1, filled: true));
+    }
+
+    // ------------------------------------------------------------ Revision
+
+    // IsModified only says whether the sheet differs from the one imported, so drawing more on a
+    // sheet that was already edited does not show in it. The window compares this count, taken when
+    // the user agreed to lose the drawing, with its value when a conversion lands, so that what was
+    // drawn in between is not thrown away with the rest.
+
+    [Fact]
+    public void Revision_編集済みの文書にさらに描くと増える()
+    {
+        EditorDocument document = CreateDocument();
+        (int x, int y) = At(0, 2, 2);
+        (int laterX, int laterY) = At(0, 6, 6);
+
+        document.BeginChange();
+        document.Paint(x, y, SKColors.Red, EditScope.SingleFrame);
+        document.EndChange();
+        Assert.True(document.IsModified);
+
+        long atConsent = document.Revision;
+
+        document.BeginChange();
+        document.Paint(laterX, laterY, SKColors.Lime, EditScope.SingleFrame);
+        document.EndChange();
+
+        // IsModified is true both times and cannot tell them apart; the revision can
+        Assert.True(document.IsModified);
+        Assert.NotEqual(atConsent, document.Revision);
+    }
+
+    [Fact]
+    public void Revision_何も変えない筆では増えない()
+    {
+        EditorDocument document = CreateDocument();
+        (int x, int y) = At(0, 2, 2);
+        long before = document.Revision;
+
+        // Erasing over transparency, which leaves the sheet as it was
+        document.BeginChange();
+        document.Paint(x, y, SKColors.Transparent, EditScope.SingleFrame);
+        document.EndChange();
+
+        Assert.Equal(before, document.Revision);
+        Assert.False(document.IsModified);
+        Assert.False(document.CanUndo);
+    }
+
+    [Fact]
+    public void Revision_元に戻すとやり直しでも増え履歴と編集済みの判定は変わらない()
+    {
+        EditorDocument document = CreateDocument();
+        (int x, int y) = At(0, 2, 2);
+
+        document.BeginChange();
+        document.Paint(x, y, SKColors.Red, EditScope.SingleFrame);
+        document.EndChange();
+        long afterStroke = document.Revision;
+
+        Assert.True(document.Undo());
+        long afterUndo = document.Revision;
+        Assert.NotEqual(afterStroke, afterUndo);
+        Assert.False(document.IsModified);
+        Assert.True(document.CanRedo);
+
+        Assert.True(document.Redo());
+        Assert.NotEqual(afterUndo, document.Revision);
+        Assert.True(document.IsModified);
+        Assert.Equal(SKColors.Red, document.GetPixel(x, y));
+    }
+
+    [Fact]
+    public void Revision_置き換えでも増え失うものがあるかの判定は変えない()
+    {
+        EditorDocument document = CreateDocument();
+        using SKBitmap other = PixelOps.CreateEmpty(Layout.Texture.Width, Layout.Texture.Height);
+        SKColor[] pixels = other.Pixels;
+        Array.Fill(pixels, SKColors.Blue);
+        other.Pixels = pixels;
+
+        long before = document.Revision;
+        document.Replace(other, foldIntoPrevious: true);
+
+        Assert.NotEqual(before, document.Revision);
+
+        // A replacement still neither makes work nor destroys it
+        Assert.False(document.IsModified);
     }
 }

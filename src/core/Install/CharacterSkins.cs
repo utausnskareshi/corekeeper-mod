@@ -91,12 +91,19 @@ public static class CharacterSkins
     /// The sheet is verified once up front rather than per character, so a broken image is
     /// rejected before anything is written and no character is left half-applied.
     /// </summary>
+    /// <param name="cancellation">
+    /// Watched while the copies are made, which is the slow half and the half that changes
+    /// nothing the user can see. Once the first picture has been swapped in the run finishes:
+    /// stopping there would leave some characters with the new picture and some without, which
+    /// is exactly the state the staging exists to avoid.
+    /// </param>
     public static IReadOnlyList<CharacterSkinResult> Install(
         string sheetPath,
         SheetLayout layout,
         string modsDirectory,
         string modFolderName,
-        IReadOnlyList<string> guids)
+        IReadOnlyList<string> guids,
+        CancellationToken cancellation = default)
     {
         if (guids.Count == 0)
         {
@@ -141,6 +148,11 @@ public static class CharacterSkins
 
         Directory.CreateDirectory(skins);
 
+        // Clear anything a killed run left behind, before this one adds its own. Done here rather
+        // than on the way out because the run that made the mess is by definition not around to
+        // tidy it.
+        SweepAbandonedStaging(skins);
+
         // Copied to one side first, then swapped in. Writing straight to each destination in
         // turn meant a failure partway through left the earlier characters replaced and the
         // rest not, with the caller told only that the whole thing failed. That really happens:
@@ -151,6 +163,11 @@ public static class CharacterSkins
         {
             foreach ((_, string path) in targets)
             {
+                // Checked here and not in the swapping loop below. Nothing has changed yet, so
+                // stopping costs the user only the copying; the finally clears what was staged
+                // and every character keeps the picture it had.
+                cancellation.ThrowIfCancellationRequested();
+
                 // Named for this process. A fixed name is one name for every copy of the program
                 // running at once, and two of them staging the same character meant the second
                 // deleted the first's copy from under it: the destination had already been
@@ -166,6 +183,12 @@ public static class CharacterSkins
                 PathSafety.DeleteFile(staging);
 
                 File.Copy(sheetPath, staging, overwrite: true);
+
+                // Stamped with the time of placing. The mod reloads a skin when this time moves,
+                // and a copy carries the source's over: two pictures stamped alike - a folder of
+                // skins unpacked from one zip - replaced each other on disk while the running game
+                // went on showing the first. The move below keeps the time it finds.
+                File.SetLastWriteTimeUtc(staging, DateTime.UtcNow);
                 staged.Add(staging);
             }
 
@@ -198,10 +221,19 @@ public static class CharacterSkins
                     // user which ones so the list on screen can be brought back in line.
                     staged.RemoveRange(0, i);
 
+                    // Which characters, not only how many: the identifiers are what install --list
+                    // prints beside each slot and name. The key and its arguments stay as they were,
+                    // so the window's translated message is unchanged.
+                    string applied = results.Count == 0
+                        ? string.Empty
+                        : $"  適用済み: {string.Join(", ", results.Select(r => r.Guid))}" + Environment.NewLine;
+
                     throw new ToolException(
                         "error.character.partial", [results.Count, targets.Count],
                         $"適用の途中で失敗した（{targets.Count} 体中 {results.Count} 体まで適用済み）: " +
                         ex.Message + Environment.NewLine +
+                        $"  失敗したファイル: {targets[i].Path}" + Environment.NewLine +
+                        applied +
                         "  ゲームを終了してから、もう一度実行すること。");
                 }
 
@@ -228,6 +260,115 @@ public static class CharacterSkins
                     // A leftover temporary file is harmless; the next install clears it.
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Removes staging files left behind by runs that were stopped before they could tidy up.
+    ///
+    /// Nothing did this before. The delete on the way in only clears the name this process would
+    /// use, the finally only clears what this run staged, and neither runs at all when the process
+    /// is killed - Ctrl+C included, which does not unwind. What is left is
+    /// <c>&lt;guid&gt;.png.&lt;pid&gt;.new</c>, a full-sized copy of a sheet that the mod never reads and
+    /// that <c>install --list</c> never shows, because it only looks at <c>*.png</c>. The only way
+    /// to clear it was to remove the mod's settings folder outright.
+    ///
+    /// A file whose process is still running is left alone. Two copies of the tool may install at
+    /// the same time - that is what the process id in the name is for - and deleting a live run's
+    /// staging file would make its move fail and report a partial install it did not have.
+    /// </summary>
+    private static void SweepAbandonedStaging(string skins)
+    {
+        IEnumerable<string> files;
+        try
+        {
+            files = Directory.EnumerateFiles(skins);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Nothing to sweep that can be reached; the install itself will say so properly
+            return;
+        }
+
+        foreach (string file in files)
+        {
+            // Read by hand rather than with a search pattern. Windows answers a pattern from the
+            // 8.3 alias as well as the real name, so "*.png.*.new" can match a file that is
+            // actually a character's picture - and this deletes what it matches.
+            if (StagingProcessId(Path.GetFileName(file)) is not { } owner || ProcessIsRunning(owner))
+            {
+                continue;
+            }
+
+            try
+            {
+                // Through PathSafety, which clears the read-only attribute first, for the same
+                // reason the staging delete does.
+                PathSafety.DeleteFile(file);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Held open or not ours to remove; the next install tries again
+            }
+        }
+    }
+
+    /// <summary>
+    /// The process id inside a staging file's name, or null when the name is not a staging name.
+    /// </summary>
+    private static int? StagingProcessId(string name)
+    {
+        if (!name.EndsWith(StagingSuffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        string withoutSuffix = name[..^StagingSuffix.Length];
+        int dot = withoutSuffix.LastIndexOf('.');
+
+        if (dot < 0
+            || !withoutSuffix[..dot].EndsWith(Extension, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return int.TryParse(
+            withoutSuffix[(dot + 1)..],
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out int owner)
+            ? owner
+            : null;
+    }
+
+    /// <summary>
+    /// Whether a process with that id is running now.
+    ///
+    /// Errs towards saying yes: an id that has been given to some unrelated program since reads as
+    /// alive and the file is left for next time, which costs one more sweep. Saying no wrongly
+    /// would delete a file another install is about to move.
+    /// </summary>
+    private static bool ProcessIsRunning(int owner)
+    {
+        try
+        {
+            using System.Diagnostics.Process process = System.Diagnostics.Process.GetProcessById(owner);
+            return !process.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            // No process has that id
+            return false;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException
+                                       or NotSupportedException
+                                       or System.ComponentModel.Win32Exception)
+        {
+            // Already gone, a platform that cannot answer, or a process this user may not open;
+            // treat it as still there. The last is not rare: the id of a run that died can be
+            // handed to a service or an elevated program, and HasExited then throws access
+            // denied instead of answering. Uncaught, that left the sweep and failed every install.
+            return true;
         }
     }
 

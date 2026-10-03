@@ -33,7 +33,11 @@ namespace CustomPlayerSkin
         /// Reported rather than thrown: the caller is a capture that runs on a timer, and a write
         /// that cannot happen is a reason to try again later rather than to stop the game.
         /// </summary>
-        /// <returns>True when the bytes were written.</returns>
+        /// <returns>
+        /// False when the write threw. The game handles some failures itself - an IOException that
+        /// outlasts its retries, a full disk - by logging "Write failed" and returning (measured on
+        /// 1.3.0.2), so true means nothing was raised, not that the bytes are certain to be on disk.
+        /// </returns>
         public static bool Write(string path, byte[] bytes)
         {
             try
@@ -121,20 +125,33 @@ namespace CustomPlayerSkin
         /// Loads a PNG and returns a texture configured for pixel art: point filtering, no tiling.
         /// Returns null when it cannot be read.
         /// </summary>
-        public static Texture2D? LoadTexture(string path)
+        /// <param name="logFailures">
+        /// Whether to say why it could not be read. The caller turns it off once one character's
+        /// image has failed too many times in a row: its own lines were capped, these were not, and a
+        /// file rewritten and still broken on every poll added a line to the log on every poll.
+        /// </param>
+        public static Texture2D? LoadTexture(string path, bool logFailures = true)
         {
             try
             {
                 if (!API.ConfigFilesystem.FileExists(path))
                 {
-                    CustomPlayerSkinMod.LogWarning($"読み込み直前に画像が消えていた: {path}");
+                    if (logFailures)
+                    {
+                        CustomPlayerSkinMod.LogWarning($"読み込み直前に画像が消えていた: {path}");
+                    }
+
                     return null;
                 }
 
                 byte[] bytes = API.ConfigFilesystem.Read(path);
                 if (bytes == null || bytes.Length == 0)
                 {
-                    CustomPlayerSkinMod.LogWarning($"画像が空だった: {path}");
+                    if (logFailures)
+                    {
+                        CustomPlayerSkinMod.LogWarning($"画像が空だった: {path}");
+                    }
+
                     return null;
                 }
 
@@ -149,7 +166,11 @@ namespace CustomPlayerSkin
 
                     if (!texture.LoadImage(bytes))
                     {
-                        CustomPlayerSkinMod.LogWarning($"PNG として読み込めなかった: {path}");
+                        if (logFailures)
+                        {
+                            CustomPlayerSkinMod.LogWarning($"PNG として読み込めなかった: {path}");
+                        }
+
                         UnityEngine.Object.Destroy(texture);
                         return null;
                     }
@@ -175,7 +196,11 @@ namespace CustomPlayerSkin
             }
             catch (Exception ex)
             {
-                CustomPlayerSkinMod.LogWarning($"画像の読み込みに失敗した ({path}): {ex.Message}");
+                if (logFailures)
+                {
+                    CustomPlayerSkinMod.LogWarning($"画像の読み込みに失敗した ({path}): {ex.Message}");
+                }
+
                 return null;
             }
         }

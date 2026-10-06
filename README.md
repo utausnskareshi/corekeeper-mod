@@ -60,7 +60,8 @@ zip に同梱の `readme.txt` には、アプリを使い始める前に必要�
 
 - **画像から作る** — ドラッグ＆ドロップで取り込み、背景の透過、切り抜き位置、ドット絵化、輪郭線、
   歩行と攻撃の動き付けを設定できます
-- **プリセットから作る** — 6 カテゴリ 30 種。18 種はこのプロジェクトの画像生成ツールで作った絵、
+- **プリセットから作る** — 6 カテゴリ 30 種。18 種はこのプロジェクトの画像生成ツール
+  （[cksgen](https://github.com/utausnskareshi/corekeeper-image-generator)、下記）で作った絵、
   12 種は配色のレシピからツールが描くもので、ゲームの絵は使っていません
 - **ゲーム内の見た目を取り込む** — MOD を導入したキャラクターの現在の見た目を、編集画面へ取り込みます
 - **ドット単位の編集** — 左右対称に描く、全コマに反映、元に戻す／やり直す、シート内の色から選ぶ
@@ -68,6 +69,18 @@ zip に同梱の `readme.txt` には、アプリを使い始める前に必要�
 - **キャラクターごとの配置と削除** — キャラクターごとに別の画像を持てます
 - **MOD の導入・更新・削除** — アプリから行えます。Unity や .NET の導入は不要です
 - **日本語 / English** の切り替え
+
+### 取り込む絵を AI で描くには（別のツール）
+
+取り込む元の絵は、別のツール「Core Keeper スキン生成ツール (cksgen)」で、画像生成 AI に描かせることも
+できます。cksgen は別のリポジトリで公開しています。
+
+- cksgen: https://github.com/utausnskareshi/corekeeper-image-generator
+
+cksgen が書き出す PNG（背景が透明な絵）は、このツールの「画像を開く…」でそのまま開けます。cksgen で横と
+後ろの絵も描いた場合は、「向き別の絵（任意）」の「右向きの絵…」と「背面の絵…」で開きます（横の絵は右を
+向いている必要があります）。cksgen の動作には NVIDIA の GPU が必要です。詳しくは cksgen の README を
+ご覧ください。
 
 ### 仕組み
 
@@ -200,8 +213,9 @@ Everything about using it is in the application's help.
   sits, how it is reduced to pixels, whether it gets an outline, and how it moves when walking
   or swinging
 - **From a preset** - 30 characters in 6 categories: 18 are pictures made for this project with
-  its companion image generator, and the tool draws the other 12 from colour recipes; none of the
-  game's own artwork is involved
+  its companion image generator ([cksgen](https://github.com/utausnskareshi/corekeeper-image-generator),
+  see below), and the tool draws the other 12 from colour recipes; none of the game's own artwork
+  is involved
 - **From the game** - fetch a character's current appearance into the editor
 - **Pixel editing** - mirrored drawing, apply to every frame, undo and redo, pick from the
   colours already in the sheet
@@ -211,6 +225,18 @@ Everything about using it is in the application's help.
 - **Install, update and remove the mod** from inside the application. Neither Unity nor .NET is
   needed
 - **Japanese and English** interface
+
+### Drawing the picture with AI (a separate tool)
+
+The picture to import can also be drawn by an image-generation AI, with a separate tool: Core Keeper
+Image Generator (cksgen), published in a repository of its own. Its interface is in Japanese only.
+
+- cksgen: https://github.com/utausnskareshi/corekeeper-image-generator
+
+The PNG that cksgen writes - with a transparent background - opens here with "Open image…" as it is.
+When cksgen has also drawn the side and back pictures, open them with "Right-facing art…" and
+"Back-facing art…" under "Art per facing (optional)"; the side picture has to face right. cksgen
+needs an NVIDIA GPU; its README has the details.
 
 ### How it works
 

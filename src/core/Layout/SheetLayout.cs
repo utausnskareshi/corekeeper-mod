@@ -295,8 +295,10 @@ public sealed record SheetLayout(
             int position = 0;
             foreach (FrameRect frame in Frames)
             {
-                // A trailing comma or a deleted entry in a hand-edited file leaves a null in the
-                // array. Reading Index from it ended the run with exit code 2 and a stack trace.
+                // A hand-edited file can hold a literal null in the array. A trailing comma does
+                // not produce one - System.Text.Json refuses it, and Parse reports that before
+                // this runs. Reading Index from the null ended the run with exit code 2 and a
+                // stack trace.
                 // Named by its place in the array, as a JSON path would name it.
                 if (frame is null)
                 {
@@ -413,8 +415,10 @@ public sealed record SheetLayout(
             errors.Add("animations が空");
         }
 
-        // Every animation must reference frames that exist, otherwise composing the sheet
-        // indexes past the end of the frame list.
+        // Every animation must reference frames that exist. Nothing downstream fails on one that
+        // does not - the composer's idle lookup and the preview both skip an index they cannot
+        // find - so without this the mistake would show only as missing motion or a preview
+        // that stalls.
         if (Animations is not null && Frames is not null)
         {
             HashSet<int> definedIndices = [.. Frames.Where(f => f is not null).Select(f => f.Index)];

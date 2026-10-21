@@ -56,7 +56,8 @@ public static class GameVersion
     private const int HeaderBytes = 64 * 1024;
 
     /// <summary>
-    /// Product name written just before the version, used to anchor the search.
+    /// Names written before the version, used to anchor the search: the product name, and the
+    /// company name as a fallback.
     ///
     /// Without an anchor the first version-shaped string in the file is Unity's own, which sits
     /// at the very start and would be reported as the game's version.
@@ -72,7 +73,10 @@ public static class GameVersion
 
     private static IReadOnlyList<string>? _supported;
 
-    /// <summary>The versions this build has been checked against, as major.minor.patch.</summary>
+    /// <summary>
+    /// The versions this build has been checked against, as listed (such as "1.3.0.1"); only
+    /// their leading major.minor.patch is matched.
+    /// </summary>
     public static IReadOnlyList<string> SupportedVersions => _supported ??= LoadSupported();
 
     private static IReadOnlyList<string> LoadSupported()
@@ -202,13 +206,14 @@ public static class GameVersion
                 continue;
             }
 
-            // Bounded rather than searching the rest of the file. Unity writes several other
-            // version fields into the same block - in the real file two of them sit between the
-            // product name and the one wanted - and they are currently skipped only because they
-            // happen to be two-component strings such as "1.0". Taking the first match at any
-            // distance would silently return one of those the day a build carries "1.0.0.0",
-            // and a plausible wrong version is worse than none: it reads as "your game is
-            // unsupported" rather than "the version could not be determined".
+            // Bounded rather than searching the rest of the file: a version-shaped string far
+            // past the anchor belongs to an unrelated part of the file, and a plausible wrong
+            // version is worse than none: it reads as "your game is unsupported" rather than
+            // "the version could not be determined". The bound does nothing about Unity's other
+            // version fields in the same block - in the real file two of them sit between the
+            // product name and the one wanted, and the pattern passes over them only because
+            // they happen to be two-component strings such as "1.0"; a "1.0.0.0" there is left
+            // to the scoring below.
             int from = start + anchor.Length;
             string window = header[from..Math.Min(header.Length, from + SearchWindowBytes)];
 
@@ -224,8 +229,8 @@ public static class GameVersion
             // Scored rather than taken in order. Unity's own fields in this block look like
             // "1.0" and "1.0.0.0", while the game writes "1.2.1.5-8be0", so a build suffix is
             // the one unmistakable marker; a fourth component is weak evidence because Unity's
-            // defaults have one too. Position breaks the tie, because the game's own field is
-            // written after Unity's in the layout observed in the real file.
+            // defaults have one too. Position only breaks a tie, in favour of the earlier match
+            // (see below), so it cannot lift the game's field over Unity's, which come before it.
             string? best = null;
             int bestScore = -1;
 

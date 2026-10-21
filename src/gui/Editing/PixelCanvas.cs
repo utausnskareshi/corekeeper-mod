@@ -67,7 +67,10 @@ public sealed class PixelCanvas : Control
     public static readonly StyledProperty<FrameRect?> FrameProperty =
         AvaloniaProperty.Register<PixelCanvas, FrameRect?>(nameof(Frame));
 
-    /// <summary>The frame layout, used to draw borders and guides in whole-sheet view.</summary>
+    /// <summary>
+    /// The frame layout, used to draw the cell borders and the standing guides, in single-frame
+    /// view as well as whole-sheet view. Without it no guides are drawn.
+    /// </summary>
     public static readonly StyledProperty<SheetLayout?> LayoutProperty =
         AvaloniaProperty.Register<PixelCanvas, SheetLayout?>(nameof(Layout));
 
@@ -418,8 +421,9 @@ public sealed class PixelCanvas : Control
 
     /// <summary>
     /// Ends the stroke when the pointer capture is taken away, for instance because another
-    /// window came to the front. Without this the canvas keeps painting on mouse movement
-    /// even though no button is held, since no release event ever arrives.
+    /// window came to the front. No release event arrives then, so without this the stroke would
+    /// stay open - its undo step and any shape being dragged left pending - until the pointer
+    /// next moved over the canvas with the button up.
     /// </summary>
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
@@ -487,7 +491,7 @@ public sealed class PixelCanvas : Control
     ///
     /// The scroll moves the sheet under a pointer that has not moved, so the next sample lands
     /// far from the last one and the gap between them is filled in - measured at a sixty-pixel
-    /// line straight through the character, times thirty-nine with "apply to every frame" on.
+    /// line straight through the character, times thirty-nine with "apply to all frames" on.
     /// Nothing is lost by holding the view still until the button comes up.
     /// </summary>
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -508,7 +512,7 @@ public sealed class PixelCanvas : Control
     /// ScrollViewer, which scrolls on PageUp and PageDown - the only two keys its OnKeyDown
     /// takes, measured on Avalonia 12.1.1. The sheet then moved under a pointer that had not,
     /// and the next sample was joined to the last across the whole distance scrolled: a line
-    /// straight through the character, once per frame with "apply to every frame" on.
+    /// straight through the character, once per frame with "apply to all frames" on.
     /// </summary>
     protected override void OnKeyDown(KeyEventArgs e)
     {
@@ -552,7 +556,7 @@ public sealed class PixelCanvas : Control
             // Leaving the drawable area breaks the stroke. Keeping the last pixel meant that
             // coming back somewhere else joined the two with a straight line: measured on the
             // whole-sheet view, one sample after a detour painted 233 pixels through twelve
-            // frames, and with "apply to every frame" on, over nine thousand.
+            // frames, and with "apply to all frames" on, over nine thousand.
             //
             // An earlier pass recorded this as continuity worth having, on the grounds that a
             // brief excursion should not break the line. It buys a smoother line for a small

@@ -6,7 +6,7 @@ namespace CustomPlayerSkin
 {
     /// <summary>
     /// Mod settings. They are registered with the game's own configuration system
-    /// (<see cref="API.Config"/>), which takes care of creating and persisting the settings file.
+    /// (<see cref="API.Config"/>), which takes care of creating and persisting each setting's file.
     /// </summary>
     public sealed class ConfigValues
     {
@@ -78,7 +78,7 @@ namespace CustomPlayerSkin
                 // appearance, which is how "apply to this character only" is expressed.
                 LocalPlayerOnly = RegisterOrDefault(
                     mod, Section,
-                    "自分の操作キャラクターだけに適用する。無効にすると、同じ画像を持つ他プレイヤーにも適用される。",
+                    "自分の操作キャラクターだけに適用する。無効にすると、他プレイヤーにも、そのキャラクターの識別子の画像がこの PC にあれば適用される。",
                     "localPlayerOnly", true),
 
                 // The whole body is replaced, so overlays such as hair, eyes and clothing are hidden by default.

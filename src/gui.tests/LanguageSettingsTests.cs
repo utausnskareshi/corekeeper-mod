@@ -3,7 +3,8 @@ using CoreKeeperSkinTool.Gui.Localization;
 namespace CoreKeeperSkinTool.Gui.Tests;
 
 /// <summary>
-/// Tests for persisting the language choice.
+/// Tests for the settings file - the language, the game folder and the accepted terms - and for
+/// what is said when a save does not land.
 ///
 /// Everything here works inside a temporary folder, pointed at by the settings override, so the
 /// real user settings are never touched.

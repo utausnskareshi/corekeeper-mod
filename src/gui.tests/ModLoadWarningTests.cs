@@ -135,7 +135,7 @@ public sealed class ModLoadWarningTests : IDisposable
     public void MODが無いと分かった分岐ではどれも警告を下ろす()
     {
         // As IsModOutdated is: a game folder that went missing must not leave a warning about the
-        // mod that was in it on screen under "ゲームが見つかりません"
+        // mod that was in it on screen under env.gameNotFound
         string body = LanguageNotificationTests.MethodBody(ViewModel(), "public void RefreshEnvironment()");
 
         int notInstalled = Regex.Matches(body, @"IsModInstalled\s*=\s*false;").Count;

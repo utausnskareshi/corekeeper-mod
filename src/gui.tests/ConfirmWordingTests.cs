@@ -4,7 +4,8 @@ using System.Text.RegularExpressions;
 namespace CoreKeeperSkinTool.Gui.Tests;
 
 /// <summary>
-/// Two confirmations whose wording said something the window does not do.
+/// Confirmations, hints and messages whose wording said something the window does not do, or
+/// left out what the reader needed.
 /// </summary>
 public sealed class ConfirmWordingTests
 {
@@ -95,7 +96,7 @@ public sealed class ConfirmWordingTests
         string en = Value("en", "error.pipeline.facingVanishedFront");
 
         Assert.DoesNotContain("その向きのコマだけ", ja);
-        Assert.Contains("絵を渡していない向きのコマ", ja);
+        Assert.Contains("絵を指定していない向きのコマ", ja);
         Assert.DoesNotContain("the frames for that facing", en);
         Assert.Contains("any facing without a picture of its own", en);
 
@@ -134,7 +135,7 @@ public sealed class ConfirmWordingTests
     {
         // What the window shows. Every case said the same thing - the background tolerance or the
         // alpha cut-off - whichever picture was empty, and the likeliest cause, a picture transparent
-        // to begin with, was never named (fix 8). The command line's own sentence is pinned by
+        // to begin with, was never named. The command line's own sentence is pinned by
         // NoOpaqueWordingTests; nothing read these, so putting the old text back passed every test.
         string ja = Value("ja", key);
         string en = Value("en", key);
@@ -187,5 +188,32 @@ public sealed class ConfirmWordingTests
         // could not do it (the test campaign of 2026-09-30).
         Assert.Contains("起動中なら再起動", Value("ja", "status.fetchNothingCaptured"));
         Assert.Contains("restart it if it is running", Value("en", "status.fetchNothingCaptured"));
+    }
+
+    [Theory]
+    [InlineData("ja", "status.fetchNotCaptured")]
+    [InlineData("ja", "status.fetchNothingCaptured")]
+    [InlineData("en", "status.fetchNotCaptured")]
+    [InlineData("en", "status.fetchNothingCaptured")]
+    public void 取り込みが無いときの案内は書き出したMODが有効なら記録されないと言う(string language, string key)
+    {
+        // The tool's mod records nothing while a skin exported by this application is drawn
+        // (SkinCapture.DrawnByExportedSkin, 0.4.2), so "load the character" or "restart" alone sent a
+        // player round in circles until that mod was disabled (the code review of 2026-10-08)
+        string text = Value(language, key);
+
+        if (language == "ja")
+        {
+            Assert.Contains("書き出した MOD", text);
+            Assert.Contains("無効", text);
+        }
+        else
+        {
+            Assert.Contains("exported", text);
+            Assert.Contains("disable", text);
+        }
+
+        // Still one placeholder, the character
+        Assert.Single(Regex.Matches(text, @"\{\d+\}"));
     }
 }

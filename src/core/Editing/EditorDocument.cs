@@ -209,8 +209,9 @@ public sealed class EditorDocument
     }
 
     /// <summary>
-    /// Call before starting a stroke to push the previous state onto the undo history.
-    /// Calling it once on press means a whole drag stroke is undone in a single step.
+    /// Call before starting a stroke, so the state before it can go onto the undo history - which
+    /// happens only once the stroke changes a pixel. Calling it once on press means a whole drag
+    /// stroke is undone in a single step.
     /// </summary>
     public void BeginChange()
     {
@@ -412,9 +413,11 @@ public sealed class EditorDocument
     /// <summary>
     /// Replaces the whole sheet as one undoable step.
     ///
-    /// Used when a preset is chosen over work already on the canvas. Building a fresh document
-    /// instead threw the undo history away with it, so a stray change of the preset dropdown
-    /// destroyed hand-drawn edits with nothing able to bring them back.
+    /// Replacing in place, rather than building a fresh document, keeps the undo history: a fresh
+    /// document threw it away, so a stray change of the preset dropdown destroyed hand-drawn edits
+    /// with nothing able to bring them back. This overload never folds into the step before it; the
+    /// window's preset and Random choices call <see cref="Replace(SKBitmap, bool)"/> with
+    /// foldIntoPrevious set, so a run of them costs one step.
     /// </summary>
     public void Replace(SKBitmap sheet) => Replace(sheet, foldIntoPrevious: false);
 
@@ -585,7 +588,8 @@ public sealed class EditorDocument
     /// thirty-nine frames, and those parts are not connected to each other.
     /// </summary>
     /// <param name="scope">
-    /// Whether to work inside the clicked frame only, or across the whole sheet.
+    /// Whether to work inside the clicked frame only (outside every frame, the cell the click
+    /// landed in), or across the whole sheet.
     /// </param>
     /// <returns>How many pixels changed, so the caller can say when nothing matched.</returns>
     public int ReplaceColour(int x, int y, SKColor color, EditScope scope)
@@ -628,7 +632,7 @@ public sealed class EditorDocument
 
         // One cell at a time otherwise. A click inside a frame means that frame; a click in a
         // gap or an unused cell means the cell it landed in, which keeps the answer bounded and
-        // predictable. It used to mean the whole texture, so turning "apply to every frame" off
+        // predictable. It used to mean the whole texture, so turning "apply to all frames" off
         // and clicking a gap repainted all thirty-nine frames - the opposite of what it says.
         SKRectI area = TryGetFrameAt(x, y, out FrameRect clicked)
             ? new SKRectI(clicked.X, clicked.YTopLeft, clicked.X + clicked.W, clicked.YTopLeft + clicked.H)
@@ -713,7 +717,6 @@ public sealed class EditorDocument
     /// </summary>
     private const int MaxSpan = 1024;
 
-    /// <summary>The pixels of a rectangle, as an outline or filled through.</summary>
     /// <summary>
     /// Drops the positions that fall outside one frame.
     ///
@@ -738,6 +741,7 @@ public sealed class EditorDocument
         ];
     }
 
+    /// <summary>The pixels of a rectangle, as an outline or filled through.</summary>
     /// <remarks>
     /// Bounded by <see cref="MaxSpan"/>, like <see cref="LinePixels"/>. A rectangle clipped to a
     /// box is still a rectangle, so nothing about the shape is lost. Unbounded, a corner at
@@ -770,7 +774,7 @@ public sealed class EditorDocument
 
         // The four sides, walked directly. Scanning the whole area and keeping only the pixels
         // on its edge gave the same answer at the cost of the area: a rectangle a thousand
-        // across spent a billion tests to produce four thousand points.
+        // across spent a million tests to produce four thousand points.
         for (int x = left; x <= right; x++)
         {
             points.Add((x, top));
@@ -906,10 +910,11 @@ public sealed class EditorDocument
                     continue;
                 }
 
-                // The frame is checked, and so is the sheet. A layout can place a frame that
-                // runs off the texture - nothing validates one against the other - and then the
-                // frame check alone let the index walk past the end of the row: far enough for
-                // IndexOutOfRangeException, and short of that, quietly over the next row.
+                // The frame is checked, and so is the sheet. SheetLayout.Validate refuses a frame
+                // that runs off the texture, but a layout that never went through it - one built
+                // or changed in code - can still hold one, and then the frame check alone let the
+                // index walk past the end of the row: far enough for IndexOutOfRangeException, and
+                // short of that, quietly over the next row.
                 if (!InBounds(nx, ny))
                 {
                     continue;

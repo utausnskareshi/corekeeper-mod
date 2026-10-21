@@ -1,0 +1,79 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:CoreKeeperSkinTool.Gui.ViewModels"
+        xmlns:loc="using:CoreKeeperSkinTool.Gui.Localization"
+        x:Class="CoreKeeperSkinTool.Gui.Views.ModIoExportWindow"
+        x:DataType="vm:ModIoExportDialogModel"
+        Icon="/Assets/icon.ico"
+        Title="{loc:Tr modio.title}"
+        Width="640" SizeToContent="Height" MaxHeight="820"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False">
+  <Window.Styles>
+    <Style Selector="TextBlock.label">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="0,4,0,4" />
+    </Style>
+    <Style Selector="TextBlock.hint">
+      <Setter Property="Opacity" Value="0.65" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="Margin" Value="0,2,0,0" />
+    </Style>
+    <Style Selector="TextBlock.warning">
+      <Setter Property="Foreground" Value="#FFB454" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+  </Window.Styles>
+
+  <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="20" Spacing="12">
+      <TextBlock TextWrapping="Wrap" Text="{loc:Tr modio.intro}" />
+
+      <StackPanel>
+        <TextBlock Classes="label" Text="{loc:Tr modio.name}" />
+        <TextBox x:Name="NameBox" Text="{Binding Name}" MaxLength="50" />
+        <TextBlock Classes="hint" Text="{loc:Tr modio.nameHint}" />
+      </StackPanel>
+
+      <StackPanel>
+        <TextBlock Classes="label" Text="{loc:Tr modio.version}" />
+        <TextBox Text="{Binding Version}" MaxLength="20" Width="160" HorizontalAlignment="Left" />
+        <TextBlock Classes="hint" Text="{loc:Tr modio.versionHint}" />
+      </StackPanel>
+
+      <StackPanel>
+        <TextBlock Classes="label" Text="{loc:Tr modio.gear}" />
+        <RadioButton GroupName="ModIoGear" IsChecked="{Binding ShowGear}" Content="{loc:Tr modio.gearShown}" />
+        <RadioButton GroupName="ModIoGear" IsChecked="{Binding HideGear}" Content="{loc:Tr modio.gearHidden}" />
+        <TextBlock Classes="warning" Margin="0,4,0,0" IsVisible="{Binding IsUntested}" Text="{loc:Tr modio.untested}" />
+      </StackPanel>
+
+      <Border Background="#18000000" CornerRadius="4" Padding="10">
+        <StackPanel Spacing="6">
+          <TextBlock TextWrapping="Wrap" Text="{loc:Tr modio.target}" />
+          <TextBlock TextWrapping="Wrap" Text="{Binding GameVersionNote}" />
+        </StackPanel>
+      </Border>
+
+      <StackPanel>
+        <!-- The label is a TextBlock rather than the CheckBox's string Content, as in the main
+             window's character list: a string Content becomes AccessText, which would swallow an
+             underscore and turn the letter after it into a shortcut. -->
+        <CheckBox IsChecked="{Binding RightsConfirmed}">
+          <TextBlock TextWrapping="Wrap" Text="{loc:Tr modio.rights}" />
+        </CheckBox>
+        <TextBlock Classes="hint" Margin="28,2,0,0" Text="{loc:Tr modio.rightsHint}" />
+      </StackPanel>
+
+      <TextBlock Classes="warning" IsVisible="{Binding HasProblem}" Text="{Binding Problem}" />
+
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button x:Name="CancelButton" Padding="16,6" Content="{loc:Tr confirm.cancel}" />
+        <Button x:Name="ExportButton" Padding="16,6"
+                IsEnabled="{Binding CanExport}" Content="{loc:Tr modio.export}" />
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</Window>

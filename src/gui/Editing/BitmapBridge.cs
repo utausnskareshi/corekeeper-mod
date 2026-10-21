@@ -71,7 +71,7 @@ public static class BitmapBridge
     ///
     /// A single contiguous copy assumes RowBytes equals width * 4. That happens to hold on the
     /// usual desktop backends, but a padded stride would then shear the image diagonally,
-    /// and the last row would run past the end of the buffer.
+    /// and the bottom of the bitmap would be left unwritten.
     /// </summary>
     private static void CopyRows(uint[] buffer, ILockedFramebuffer frame, int width, int height)
     {

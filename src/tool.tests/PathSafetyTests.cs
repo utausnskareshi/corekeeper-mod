@@ -46,9 +46,9 @@ public sealed class PathSafetyTests
     public void EnsureSingleSegment_末尾のドットや空白を拒否する(string name)
     {
         // Found by the adversarial pass. Windows strips trailing dots and spaces when resolving
-        // a path, so "..." resolves to the parent even though it is not spelled "..", and it
-        // passed every spelling-based check. Combining it under Mods produced Mods itself,
-        // which would have made the swap move the entire Mods folder aside.
+        // a path, so "..." resolves to the folder it is combined with even though it is not
+        // spelled "." or "..", and it passed every spelling-based check. Combining it under Mods
+        // produced Mods itself, which would have made the swap move the entire Mods folder aside.
         Assert.Throws<ToolException>(() => PathSafety.EnsureSingleSegment(name, "テスト名"));
     }
 

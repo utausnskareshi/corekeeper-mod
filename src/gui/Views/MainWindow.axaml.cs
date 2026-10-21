@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using CoreKeeperSkinTool.Editing;
+using CoreKeeperSkinTool.Export;
 using CoreKeeperSkinTool.Gui.Editing;
 using CoreKeeperSkinTool.Gui.Localization;
 using CoreKeeperSkinTool.Install;
@@ -26,11 +27,12 @@ public partial class MainWindow : Window
 
         OpenButton.Click += OnOpenClicked;
         SaveButton.Click += OnSaveClicked;
+        ExportModIoButton.Click += OnExportModIoClicked;
         InstallButton.Click += OnInstallClicked;
         UninstallButton.Click += OnRemoveFromCharactersClicked;
         // A character created in the game while this window is open has to show up. Switching
         // back to the window is the moment that always happens, and the scan is skipped unless
-        // the save folder actually changed.
+        // the save folders, or the mods folder the list is read through, actually changed.
         Activated += (_, _) => Model.RefreshCharactersIfChanged();
         // The same moment for the game's log: starting the game and watching it refuse the mod
         // ends with switching back here. Read again only when the log has changed.
@@ -161,8 +163,8 @@ public partial class MainWindow : Window
 
         bool control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
 
-        // Undo is the only shortcut that takes a modifier. Letting the plain-letter ones through
-        // on Ctrl or Alt meant Ctrl+B silently changed tool and swallowed the key on the way.
+        // Only undo and redo take a modifier. Letting the plain-letter shortcuts through on Ctrl
+        // or Alt meant Ctrl+B silently changed tool and swallowed the key on the way.
         if (e.Key is not (Key.Z or Key.Y)
             && (control || e.KeyModifiers.HasFlag(KeyModifiers.Alt)))
         {
@@ -170,9 +172,10 @@ public partial class MainWindow : Window
         }
 
         // Escape while a line or rectangle is being dragged calls it off: the preview goes, and
-        // letting go writes nothing. There was no other way to - the canvas keeps a stroke to the
-        // button that began it - so a shape seen in the wrong place could only be written and
-        // then undone, over every frame by default.
+        // letting go writes nothing. The canvas keeps a stroke to the button that began it, so the
+        // only other way to call it off is the other button (OtherButtonPressed, wired above);
+        // without either, a shape seen in the wrong place could only be written and then undone,
+        // over every frame by default.
         if (e.Key == Key.Escape && Canvas.IsPainting && Model.CancelShapeInProgress())
         {
             e.Handled = true;
@@ -382,8 +385,9 @@ public partial class MainWindow : Window
     /// <summary>
     /// Picks a picture for one of the optional facings.
     ///
-    /// No question about discarding edits, unlike opening a front picture: this replaces the art
-    /// in one direction's frames and leaves the canvas as it is.
+    /// No question about discarding edits, unlike opening a front picture: the picture only feeds
+    /// the next conversion, and RequestRebuild never converts over hand edits - it holds the
+    /// rebuild back behind "Rebuild from settings", which asks first.
     /// </summary>
     private async Task OnFacingClickedAsync(bool side)
     {
@@ -467,6 +471,97 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Set from a press of "Export for mod.io…" until that export is done or called off.
+    ///
+    /// The press can wait for a picture on its way before the screen opens, and the window takes
+    /// clicks while it does: each press then waited and put a screen of its own up.
+    /// </summary>
+    private bool _exportingForModIo;
+
+    /// <summary>
+    /// Writes the picture as a mod to upload to mod.io: the choices first, then where to save.
+    ///
+    /// Asked in that order so the file name offered can carry the name and version just chosen.
+    /// Uploading is left to the person exporting, on the mod.io website.
+    ///
+    /// The screen opens once a picture on its way has arrived, so the name it offers and the picture
+    /// written are those of the one the button was pressed for. The logo and the memo beside the zip
+    /// are replaced as well, and the save dialog asks only about the zip, so those already there are
+    /// asked about before anything is written.
+    /// </summary>
+    private async void OnExportModIoClicked(object? sender, RoutedEventArgs e)
+    {
+        if (_exportingForModIo)
+        {
+            return;
+        }
+
+        _exportingForModIo = true;
+        try
+        {
+            if (!Model.HasDocument)
+            {
+                return;
+            }
+
+            if (!await Model.SettleBeforeModIoExportAsync())
+            {
+                return;
+            }
+
+            ModIoExportWindow dialog = new(Model.CreateModIoExportDialog());
+            if (await dialog.ShowDialog<ModIoExportOptions?>(this) is not { } options)
+            {
+                return;
+            }
+
+            IStorageFile? file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = Loc.Instance["dialog.modioSaveTitle"],
+                SuggestedFileName = ModIoExportDialogModel.SuggestedFileName(options),
+                DefaultExtension = "zip",
+                FileTypeChoices = [new FilePickerFileType("ZIP") { Patterns = ["*.zip"] }],
+            });
+
+            if (file?.TryGetLocalPath() is { } path)
+            {
+                // Refused before anything is asked: a picture being converted under the logo's name
+                // was listed below as about to be replaced, and only then refused
+                if (Model.RefuseModIoTarget(path))
+                {
+                    return;
+                }
+
+                // A logo touched up by hand under the name the logo is written to was replaced
+                // without a word: the save dialog has asked about the zip alone
+                if (ModIoExporter.ExistingCompanions(path) is { Count: > 0 } existing)
+                {
+                    ConfirmWindow confirm = new(
+                        Loc.Instance["confirm.modioReplaceCompanions"],
+                        "confirm.modioReplaceCompanionsOk",
+                        string.Join(Environment.NewLine, existing));
+
+                    if (await confirm.ShowDialog<bool?>(this) != true)
+                    {
+                        return;
+                    }
+                }
+
+                // After any conversion still on its way, so what is written is what is on screen
+                await Model.ExportForModIoWhenSettledAsync(path, options);
+            }
+        }
+        catch (Exception ex)
+        {
+            Model.SetStatus("status.modioFailed", ex);
+        }
+        finally
+        {
+            _exportingForModIo = false;
+        }
+    }
+
     private async void OnInstallClicked(object? sender, RoutedEventArgs e)
     {
         // After any conversion or load still on its way: pressed just after a setting changed,
@@ -540,7 +635,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The one button in the top bar: it puts the mod into the game, or takes it back out.
+    /// The mod button in the environment bar: it puts the mod into the game, or takes it back out.
     /// </summary>
     private async void OnModButtonClicked(object? sender, RoutedEventArgs e)
     {

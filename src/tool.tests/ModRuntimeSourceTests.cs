@@ -143,11 +143,11 @@ public sealed class ModRuntimeSourceTests
     }
 
     /// <summary>
-    /// An entry whose character is still on screen is kept when it expires. LastSeen moves only when
-    /// the game rebuilds a look, which a character standing in the same equipment never gets, so the
-    /// one being played went "unseen" every five minutes while drawn the whole time: every player was
-    /// rebuilt, the same image re-read and re-decoded (ten times in one real session), and a character
-    /// with no image logged "no image" again each time.
+    /// An entry whose character is still on screen is kept when it expires. LastSeen used to move
+    /// only when the game rebuilt a look, which a character standing in the same equipment never
+    /// gets, so the one being played went "unseen" every five minutes while drawn the whole time:
+    /// every player was rebuilt, the same image re-read and re-decoded (ten times in one real
+    /// session), and a character with no image logged "no image" again each time.
     /// </summary>
     [Fact]
     public void 期限切れでも画面上のキャラクターの項目は残す()

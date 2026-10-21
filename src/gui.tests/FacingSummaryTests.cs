@@ -119,7 +119,7 @@ public sealed class FacingSummaryTests : IDisposable
     [Fact]
     public void はみ出しが向き別の絵の幅によるならそう言う()
     {
-        // The case measured: a 40x60 front fits the 16-wide box at 9x19, and a 120x40 right-facing
+        // The case measured: a 40x60 front fits the 16-wide box at 13x19, and a 120x40 right-facing
         // picture scaled to that height is 57 wide, well past the 26-pixel frame
         using SKBitmap front = Solid(40, 60, SKColors.Red);
         using SKBitmap wide = Solid(120, 40, SKColors.Green);

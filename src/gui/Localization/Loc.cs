@@ -4,14 +4,14 @@ using System.Text.Json;
 
 namespace CoreKeeperSkinTool.Gui.Localization;
 
-/// <summary>A language that can be selected.</summary>
-/// <param name="Code">Language code, such as ja or en.</param>
-/// <param name="DisplayName">The language's own name for itself.</param>
 /// <summary>One piece of text, labelled with the language it is written in.</summary>
 /// <param name="Language">That language's own name, as it calls itself.</param>
 /// <param name="Text">The text.</param>
 public sealed record LocalizedText(string Language, string Text);
 
+/// <summary>A language that can be selected.</summary>
+/// <param name="Code">Language code, such as ja or en.</param>
+/// <param name="DisplayName">The language's own name for itself.</param>
 public sealed record LanguageOption(string Code, string DisplayName)
 {
     public override string ToString() => DisplayName;
@@ -20,8 +20,8 @@ public sealed record LanguageOption(string Code, string DisplayName)
 /// <summary>
 /// Holds every string shown in the interface.
 ///
-/// The strings live in a per-language JSON file embedded in the executable.
-/// Adding a language only requires dropping in <c>Localization/lang.&lt;code&gt;.json</c>,
+/// The strings live in a per-language JSON file embedded in the Core assembly. Adding a
+/// language only requires dropping in <c>src/core/Localization/lang.&lt;code&gt;.json</c>,
 /// with no code changes required.
 ///
 /// The view binds to it through <c>{loc:Tr key}</c>.
@@ -249,10 +249,11 @@ public sealed class Loc : INotifyPropertyChanged
     /// <summary>
     /// Fills in a template, and falls back to the template itself when it cannot be filled.
     ///
-    /// These are the screens shown before any window exists, and the call sits outside every
-    /// try: a template asking for one more value than the caller supplies threw a
-    /// FormatException that reached the top and ended the application with no window at all and
-    /// nothing on screen to act on. One badly worded translation is not worth that. The
+    /// These are the screens shown before the main window exists. When this was written the call
+    /// sat outside every try: a template asking for one more value than the caller supplies threw
+    /// a FormatException that reached the top and ended the application with no window at all and
+    /// nothing on screen to act on. Program.Main now catches it and shows the failure, but the
+    /// application still does not open. One badly worded translation is not worth that. The
     /// unfilled template still says roughly what it meant to.
     /// </summary>
     private static string SafeFormat(string template, object?[] args)

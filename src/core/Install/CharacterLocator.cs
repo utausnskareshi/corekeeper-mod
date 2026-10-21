@@ -28,7 +28,7 @@ public sealed record GameCharacter(int SlotIndex, string Guid, string Name, Date
 
     /// <summary>
     /// The number to show. Creative characters are counted from one again, because that is how
-    /// the game lists them; showing the raw slot would number the first creative character 31.
+    /// the game lists them; numbering them by slot like the others would make the first one 31.
     /// </summary>
     public int DisplayNumber =>
         IsCreative ? SlotIndex - CharacterLocator.CreativeStartIndex + 1 : SlotIndex + 1;
@@ -129,9 +129,9 @@ public static class CharacterLocator
     /// <summary>
     /// Reads the characters of every platform and user the game has data for.
     ///
-    /// Used at start-up to answer "does this machine have any character at all", which must not
-    /// depend on the mods folder: that folder only appears once a mod has run, so going through
-    /// it would report no characters on an installation that simply has never loaded one.
+    /// Used for the character list when no account has a mods folder, so it must not go through
+    /// one. The game creates that folder when it starts (measured on 1.3.0.2), but the characters
+    /// do not need it: an account whose mods folder is missing still has its characters listed.
     /// </summary>
     public static IReadOnlyList<GameCharacter> FindAll()
     {

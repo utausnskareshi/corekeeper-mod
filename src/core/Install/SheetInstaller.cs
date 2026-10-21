@@ -4,7 +4,9 @@ using SkiaSharp;
 
 namespace CoreKeeperSkinTool.Install;
 
-/// <summary>Installs a generated sprite sheet where the mod reads it.</summary>
+/// <summary>
+/// Checks a sprite sheet before it is installed where the mod reads it, and names the mod's folder.
+/// </summary>
 public static class SheetInstaller
 {
     /// <summary>Folder name used by the mod. Must match the mod's <c>RootDirectory</c>.</summary>
@@ -19,12 +21,13 @@ public static class SheetInstaller
     // used to live here too, but nothing in the product called either of them - the only callers
     // were tests, which meant six checks of "a broken sheet never reaches the game" were
     // guarding a route no user could take, while the route users do take checks the mod folder
-    // name and this one did not. What remains is Verify, which CharacterSkins calls.
+    // name and this one did not. What remains is Verify, which CharacterSkins calls, and the
+    // two PNG checks it makes, which cks validate uses as well.
 
     /// <summary>
-    /// Checks the two things that would otherwise fail silently in game: the sheet has the
-    /// dimensions the layout expects, and it is not blank. Individual frames are not inspected;
-    /// an empty frame is a legitimate choice, an empty sheet is an invisible character.
+    /// Checks the things that would otherwise fail silently in game: the file is a whole PNG, the
+    /// sheet has the dimensions the layout expects, and it is not blank. Individual frames are not
+    /// inspected; an empty frame is a legitimate choice, an empty sheet is an invisible character.
     /// </summary>
     public static void Verify(string sheetPath, SheetLayout layout)
     {

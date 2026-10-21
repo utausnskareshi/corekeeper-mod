@@ -6,7 +6,7 @@ namespace CoreKeeperSkinTool.Tests;
 /// <summary>
 /// Tests for reading the installed game's version and deciding whether this build supports it.
 ///
-/// Unity writes the version into globalgamemanagers, just after the company and product names.
+/// Unity writes the version into globalgamemanagers, some way after the company and product names.
 /// The awkward part is that the file also opens with Unity's own version, which is the same
 /// shape, so the parsing has to be anchored rather than take the first thing that looks right.
 /// </summary>
@@ -73,8 +73,9 @@ public sealed class GameVersionTests : IDisposable
 
     /// <summary>
     /// Unity writes several version fields into the same block. In the real file two of them sit
-    /// between the product name and the one wanted, and they are currently passed over only
-    /// because they happen to be two-component strings. A three-component one must not win.
+    /// between the product name and the one wanted, and the pattern passes over them only
+    /// because they happen to be two-component strings. One it does match, such as 1.0.0.0,
+    /// must not win.
     /// </summary>
     [Fact]
     public void FindVersion_手前にある別のバージョン欄に釣られない()
@@ -344,12 +345,50 @@ public sealed class GameVersionTests : IDisposable
     }
 
     /// <summary>
-    /// The tool's version follows the game's major.minor.patch - 1.3.0 for Core Keeper 1.3.0.x - so
-    /// the number says which game it is made for (the user's decision of 2026-10-02). It is set once,
-    /// in src/Directory.Build.props, and has to name the newest game version the tool supports.
+    /// 1.3.0.5-cb48 (Steam build 25723392, 2026-10-08): the sprite bundles are byte-identical to
+    /// 1.3.0.4, and the bundle holding the player prefab gained 38 objects unrelated to it - the
+    /// prefab, the animator, its clips and the skin colours came out identical. The code that changed
+    /// is mostly the grappling hook; of the types the mods use only Manager changed, in EarlyInit (with
+    /// -safemode it now skips Steam Workshop mods too), which neither mod calls. The mod and the one
+    /// written for mod.io both compile and pass the game's own code check, and the game loaded the
+    /// mod, drew with it and applied a gear setting and a picture changed while it ran.
     /// </summary>
     [Fact]
-    public void 製品の版は対応するゲームの最新の版と同じ番号()
+    public void 実測の記録に1_3_0_5_cb48が載っている()
+    {
+        CoreKeeperSkinTool.Layout.SheetLayout layout =
+            CoreKeeperSkinTool.Layout.SheetLayout.LoadEmbedded();
+
+        Assert.Contains("1.3.0.5-cb48", layout.VerifiedOn);
+    }
+
+    /// <summary>
+    /// 1.3.0.6-6e73 (Steam build 25825408, 2026-10-10): the sprite bundles are byte-identical to
+    /// 1.3.0.5, and the bundle holding the player prefab gained four objects unrelated to it - the
+    /// prefab, the animator, its clips and the skin colours came out identical. The only managed code
+    /// that changed is WorldSlotPlayOption.ActivateSlot, which no longer turns Steam free weekend
+    /// players away from a saved world. The mod and the one written for mod.io both compile and pass
+    /// the game's own code check, and the game loaded the mod, drew with it, applied a gear setting
+    /// and a picture changed while it ran, and recorded the look the tool fetches.
+    /// </summary>
+    [Fact]
+    public void 実測の記録に1_3_0_6_6e73が載っている()
+    {
+        CoreKeeperSkinTool.Layout.SheetLayout layout =
+            CoreKeeperSkinTool.Layout.SheetLayout.LoadEmbedded();
+
+        Assert.Contains("1.3.0.6-6e73", layout.VerifiedOn);
+    }
+
+    /// <summary>
+    /// The first two numbers of the tool's version follow the game's major.minor - 1.3 for Core
+    /// Keeper 1.3 - so the number says which game it is made for, and the third counts the tool's
+    /// own releases (the user's decisions of 2026-10-02 and 2026-10-21; up to 1.3.0 all three
+    /// numbers followed the game). It is set once, in src/Directory.Build.props, and its first two
+    /// numbers have to name the newest game version the tool supports.
+    /// </summary>
+    [Fact]
+    public void 製品の版の先頭2つは対応するゲームの最新の版と同じ番号()
     {
         Version product = typeof(GameVersion).Assembly.GetName().Version!;
 
@@ -359,7 +398,7 @@ public sealed class GameVersionTests : IDisposable
             .Select(Version.Parse)
             .Max()!;
 
-        Assert.Equal(newest.ToString(3), product.ToString(3));
+        Assert.Equal(newest.ToString(2), product.ToString(2));
     }
 
     /// <summary>

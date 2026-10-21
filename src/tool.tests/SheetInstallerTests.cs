@@ -10,8 +10,9 @@ namespace CoreKeeperSkinTool.Tests;
 /// Install tests, focused on never handing a broken sheet to the game.
 ///
 /// They go through CharacterSkins.Install, which is the path the CLI and the window both take.
-/// They used to call SheetInstaller.Install, which nothing in the product calls, so six checks
-/// of "a broken sheet is refused" were guarding a route no user could reach.
+/// They used to call SheetInstaller.Install, which nothing in the product called (it has since
+/// been removed), so six checks of "a broken sheet is refused" were guarding a route no user
+/// could reach.
 ///
 /// The real game folder is never touched; a temporary directory stands in for the destination.
 /// </summary>
@@ -269,7 +270,7 @@ public sealed class SheetInstallerTests : IDisposable
     {
         // The mod reads a fixed path, so writing anywhere else would report success and change
         // nothing in game. The tests this file used to hold went through SheetInstaller.Install
-        // directly, which has no such check, and so fixed "MyMod" as a working folder name -
+        // directly, which had no such check, and so fixed "MyMod" as a working folder name -
         // the opposite of what the real path does.
         string sheet = CreateValidSheet();
 
@@ -299,9 +300,10 @@ public sealed class SheetInstallerTests : IDisposable
     public void Normalize_接合点を解決して同じ場所を同じ綴りにする()
     {
         // Two spellings of one folder have to compare equal, or everything keyed on the result
-        // treats one place as two. GetFullPath stops at "..", case and trailing separators, so
-        // a link anywhere along the path survived it - and the link is usually not the last
-        // segment but one nearer the top.
+        // treats one place as two. GetFullPath resolves "." and "..", and the comparisons ignore
+        // case and trailing separators, but none of that follows a link, so a link anywhere along
+        // the path survived it - and the link is usually not the last segment but one nearer the
+        // top.
         string real = Path.Combine(_workDirectory, "real", "inner");
         Directory.CreateDirectory(real);
 

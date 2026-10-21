@@ -26,7 +26,10 @@ public enum StartupNoticeKind
 /// </summary>
 /// <param name="Kind">What it is asking of the user.</param>
 /// <param name="Messages">The body of the notice, one entry per language.</param>
-/// <param name="Details">Supporting detail, one entry per language; may be empty.</param>
+/// <param name="Details">
+/// Supporting detail, one entry per language, or a single entry with no language for text that
+/// is the same in every language, such as a message from the system; may be empty.
+/// </param>
 /// <param name="OfferFolderChoice">
 /// Whether to offer pointing at a game folder. Both of the cases that raise a notice about the
 /// game are ones a different folder could answer: it may be installed more than once, and only

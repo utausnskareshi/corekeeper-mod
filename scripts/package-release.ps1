@@ -124,11 +124,16 @@ foreach ($runtime in $Runtimes) {
     Set-Content -LiteralPath (Join-Path $stage 'portable.txt') -Encoding UTF8 -Value @'
 このファイルがあると、設定をこのフォルダ内に保存します。
 フォルダごと削除すれば、アプリの設定は完全に消えます。
-ゲーム側に入れた MOD は、アプリ右上の「MOD を削除」で取り除いてください。
+ゲーム側に入れた MOD は、フォルダを削除する前に、アプリ右上の「MOD を削除」で取り除いてください。
+
+While this file is here, the settings are kept inside this folder,
+so deleting the folder removes them completely.
+Before deleting the folder, take the mod out of the game with "Remove mod" at the top right of the application.
 '@
 
-    # The libraries inside the self-contained build are MIT-licensed, which obliges us to ship
-    # their copyright and permission notice with the binaries. Missing files are a hard error:
+    # The libraries inside the self-contained build come under MIT, BSD, Apache 2.0 and OFL
+    # licences (THIRD-PARTY-NOTICES.md lists them), which oblige us to ship their copyright and
+    # permission notices with the binaries. Missing files are a hard error:
     # silently releasing without them would put the package out of licence compliance.
     #
     # readme.txt is treated the same way. It is the only place the user is told what to do about

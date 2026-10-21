@@ -52,6 +52,7 @@ public sealed class HelpContentTests
     [InlineData("ja", "取得")]
     [InlineData("ja", "MOD を更新")]
     [InlineData("ja", "市松模様")]
+    [InlineData("ja", "mod.io 用に書き出す…")]
     [InlineData("en", "Animate the walk and the attack")]
     [InlineData("en", "Only move the art, never reshape it")]
     [InlineData("en", "Preset")]
@@ -62,6 +63,7 @@ public sealed class HelpContentTests
     [InlineData("en", "Fetch")]
     [InlineData("en", "Update mod")]
     [InlineData("en", "chequerboard")]
+    [InlineData("en", "Export for mod.io…")]
     public void 現在の画面にある機能がヘルプに載っている(string language, string phrase)
     {
         Assert.Contains(phrase, AllText(language));
@@ -176,6 +178,17 @@ public sealed class HelpContentTests
         Assert.Contains(phrase, AllText(language));
     }
 
+    [Theory]
+    [InlineData("ja", "書き出した MOD を有効にしている間は、元の見た目ではなくその MOD の絵になります")]
+    [InlineData("en", "the character shows that mod's picture instead")]
+    public void 元に戻す説明は書き出したMODが有効ならその絵になると書いている(string language, string phrase)
+    {
+        // "Remove from game" takes the tool's picture off, and a mod exported for mod.io then draws
+        // its own on whoever is played: "the original appearance returns exactly" was untrue while
+        // one is enabled (the adversarial verification of 2026-10-09, A19)
+        Assert.Contains(phrase, AllText(language));
+    }
+
     /// <summary>
     /// The grid section tells the reader how many cells the sheet has, how many of them are
     /// frames, and how many are left empty. All three follow from the layout, so a game update
@@ -193,7 +206,8 @@ public sealed class HelpContentTests
             * (layout.Texture.Height / layout.Cell.Height);
         int unused = cells - layout.FrameCount;
 
-        // Searched in the layout section alone, and with the words that go round each number.
+        // Searched in the layout section alone, and the frame and empty-cell counts with the
+        // words that go round them.
         // Against the whole help text the counts were found in sentences that have nothing to do
         // with the grid - "39" appears five times in the Japanese file and "15" three, one of
         // them inside the sheet's own size, 234x156 - so the section could have been deleted
@@ -415,14 +429,16 @@ public sealed class HelpContentTests
 
         string prompt = PromptSection(BaseLanguage).Prompt;
 
-        // Both numbers come from the layout, not just the height. The width used to be written
-        // in by hand, so widening the content box would have left the prompt telling people to
-        // draw to a shape the tool no longer produces, with this test still green.
+        // Both numbers come from measured data, not just the height: the height is the content
+        // box's and the width the character's silhouette below. The width used to be written in
+        // by hand, so a wider character would have left the prompt telling people to draw to a
+        // shape the tool no longer produces, with this test still green. The content box's own
+        // width, the prompt's "16 x 19 pixel box", is not checked here.
         CoreKeeperSkinTool.Layout.PartsLayout parts =
             CoreKeeperSkinTool.Layout.PartsLayout.LoadEmbedded();
 
-        // The character's own silhouette, which is what a drawing is scaled to fill: the union
-        // of every measured part in the front-facing idle frame.
+        // The character's own silhouette, the shape the prompt asks a drawing to take: the union
+        // of the body, hair, shirt and pants boxes in the front-facing idle frame.
         int index = layout.Frames.Single(f => f is { Anim: "idle", Dir: "down" }).Index;
         IReadOnlyList<PartBox> boxes =
         [

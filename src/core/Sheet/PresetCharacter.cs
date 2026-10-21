@@ -111,8 +111,9 @@ public static class PresetCharacter
 
         // Negative for a wide build, so the torso and arms spread a pixel past the measured body
         // box; Painter clips whatever falls outside the cell. "wide" used to share the normal
-        // build's value, which made eleven of the thirty presets - and a third of every random
-        // character - draw identically to a normal build while claiming otherwise.
+        // build's value, which made eleven of the thirty presets - all recipes at the time - and
+        // a third of all random characters draw identically to a normal build while claiming
+        // otherwise.
         int inset = preset.Build switch { "slim" => 1, "wide" => -1, _ => 0 };
 
         // A creature with no separate limbs is one rounded mass rather than head plus torso
@@ -232,8 +233,8 @@ public static class PresetCharacter
 
         // Far arm and sleeve, tucked behind the chest on the leading edge. Both edges are taken
         // from the inset so they land on the silhouette the front-facing pass actually drew:
-        // without it the shadow fell two columns short of a wide character's leading edge and
-        // two columns past a slim one's, putting the slim outline back where a normal one is.
+        // without it the shadow fell a column short of a wide character's leading edge and
+        // a column past a slim one's, putting the slim outline back where a normal one is.
         p.Fill(body.X + body.W - inset - 2, torso.Y + 1, 2, torso.H - 1, palette.SkinDark);
         p.Fill(torso.X + torso.W - inset - 2, torso.Y + 2, 1, torso.H - 3, palette.ClothDark);
 
@@ -383,9 +384,9 @@ public static class PresetCharacter
     }
 
     /// <param name="eyes">
-    /// Null when this frame faces away from the camera. Features that belong to the face are
-    /// skipped in that case; ears, antennae and tails are drawn either way, because they read
-    /// the same from behind.
+    /// Null when this frame faces away from the camera. Only the beak is skipped in that case;
+    /// ears, antennae and tails are drawn either way, because they read the same from behind,
+    /// and so are wings, spots and the glow.
     /// </param>
     private static void DrawFeatures(
         Painter p, PresetDefinition preset, Palette palette,

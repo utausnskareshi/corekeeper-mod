@@ -157,8 +157,8 @@ public sealed class SheetLayoutTests : IDisposable
             }
         }
 
-        // Eight parts, each with a fill and an edge shade; well above the handful a single
-        // flat silhouette would produce.
+        // Eight parts: four filled and edged in a darker shade, three equipment outlines and the
+        // eyes in a single colour; well above the handful a single flat silhouette would produce.
         Assert.True(colours.Count >= 8, $"色が {colours.Count} 種しかなく、パーツを区別できない");
     }
 
@@ -203,8 +203,9 @@ public sealed class SheetLayoutTests : IDisposable
     [Fact]
     public void LoadFile_framesにnullの要素があればNullReferenceではなく説明付きで失敗する()
     {
-        // A trailing comma or a deleted entry in a hand-edited file leaves a null in the array,
-        // and validation read frame.Index from it: exit code 2 with a stack trace
+        // A hand-edited file can hold a literal null in the array (a trailing comma does not
+        // produce one: System.Text.Json refuses it before validation runs), and validation read
+        // frame.Index from it: exit code 2 with a stack trace
         string path = WriteLayout(map =>
         {
             List<JsonElement> frames = [.. map["frames"].EnumerateArray()];
@@ -257,7 +258,9 @@ public sealed class SheetLayoutTests : IDisposable
     [Fact]
     public void LoadFile_存在しないコマを参照するアニメーションを拒否する()
     {
-        // Composing the sheet would otherwise index past the end of the frame list
+        // Nothing downstream fails on such an index - the composer's idle lookup and the preview
+        // both skip one they cannot find - so without this check the mistake would show only as
+        // missing motion or a preview that stalls
         string path = WriteLayout(map => map["animations"] = Json("""{"idle":[0,1,999]}"""));
 
         ToolException ex = Assert.Throws<ToolException>(() => SheetLayout.LoadFile(path));

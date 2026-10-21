@@ -1,0 +1,81 @@
+#gearShown=the game's armour, clothes and helmet drawn over the picture
+#gearHidden=the game's armour, clothes and helmet hidden
+---
+mod.io upload notes: {{name}}
+
+Notes for registering a mod exported by Core Keeper Skin Maker (cks) on the mod.io website.
+The tool itself does not upload anything to mod.io.
+
+■ The mod
+  Name             {{name}}
+  Version          {{version}}
+  Equipment        {{gear}}
+  File to upload   {{zipFile}}
+  Logo             {{logoFile}}
+  Game version     {{gameVersion}}
+  Identifier       {{id}} (guid {{guid}})
+  Every export gets an identifier of its own, so zips exported separately can each be registered as a mod of their own.
+
+■ Registering it as a new mod
+  1. Open https://mod.io/g/corekeeper, sign in, press "Add" at the top right and choose "Mod" (https://mod.io/g/corekeeper/m/add).
+     Your mod.io account needs a verified email address; until it is verified, the form for adding a mod does not appear.
+     Steps 2 to 7 are the fields of the first stage, "Mod profile".
+  2. Mod name: {{name}}
+     Profile URL (the end of the mod page's address): lowercase letters, numbers and dashes, up to 50 characters (e.g. my-knight-skin).
+     If the name has no Latin letters or digits, this is not filled in for you; type one yourself.
+  3. Summary (up to 250 characters), for example:
+       Changes your own player character's look to "{{name}}". Cosmetic only. Made with Core Keeper Skin Maker (cks).
+  4. Mod listing image (the logo): {{logoFile}} (1280x720)
+     mod.io takes png or jpg, at least 512x288, up to 8 MB, 16:9 recommended. An image of your own works too.
+  5. Tag selection: pick these four.
+       Game Version      {{gameVersion}}
+       Access Type       Script
+       Application Type  Client
+       Type              Visual
+     Without the Game Version tag, players get a warning at start-up that the mod is not made for their version, and it does not load unless they choose "Load anyway".
+     With Access Type set to Asset, the mod's scripts do not run.
+  6. Description, for example:
+       Changes your own player character's look to "{{name}}", whichever character you play.
+       Equipment: {{gear}} (held weapons and tools always show).
+       Other players' screens are not affected. Enable only one look-changing mod at a time.
+       Made with Core Keeper Skin Maker (cks): https://github.com/utausnskareshi/corekeeper-mod
+  7. Mod visibility: Public or Private; Public is preselected.
+     Core Keeper's mod.io has no approval step before publishing (as of 2026-10), so with Public the mod is visible to everyone as soon as the file in step 8 is published.
+     You can change the visibility later on the mod's edit page.
+     Then press "Create Mod" (this creates the mod's page).
+     The stages that follow - Add media (gallery images, optional), Dependencies and, if shown, Reuse permissions - can be left empty; just go on.
+     The logo does not need adding again, and this mod depends on no other mod.
+  8. In the File manager of the "Upload file(s)" stage, choose {{zipFile}} and enter {{version}} as the Version.
+     Tick "I agree to the terms and privacy policy" and press "Upload & publish" (the button that publishes the file).
+     A file uploaded with "Upload & keep as draft" does not become the current file and does not reach players until you press "Publish" in the file list.
+     To keep the mod to yourself, use Private in step 7 rather than a draft.
+
+■ Updating a registered mod
+  Upload the newly exported zip in the File manager of that mod's page.
+  Enter this zip's version ({{version}}) as the Version and what changed in the Changelog. If {{version}} is the same as the last upload, export again with a higher version (this is the version the game's log shows).
+  Tick the terms and press "Upload & publish": the new file becomes the current one, and subscribers get it automatically.
+  A file uploaded with "Upload & keep as draft" does not reach anyone until you press "Publish" in the file list.
+  Each export gets a new mod identifier (name and guid), so after an update the load order a player arranged in the Mods menu and their "Load anyway" choice for this mod return to their defaults (the subscription and the enabled state carry over).
+  Registering it with "Add" > "Mod" instead makes it a separate mod (both can be chosen in the game).
+
+■ Using it in the game
+  - Subscribe from the game's Mods menu or on the mod.io website, enable it, and restart the game.
+  - It changes only the player's own character. Other players are not changed.
+  - With two or more mods exported by cks enabled, only the first in the load order is applied.
+  - A character that cks has given a picture with "Apply to game" keeps that picture.
+    To see the mod.io one on that character, take the cks picture off with "Remove from game" in cks.
+
+■ When the game updates
+  The game compares only the first three numbers of its version (such as 1.3.0) with the Game Version tags.
+  When those change (for example 1.3.0 to 1.3.1), add the new Game Version on the mod's page once mod.io has that tag.
+  Without it, players get a warning at start-up and the mod does not load unless they choose "Load anyway".
+  A player who chooses "Disable" in that warning has the mod disabled, and it stays unloaded even after you add the tag, until they enable it again in the game's Mods menu (the warning shows the identifier {{id}}, not the mod's name).
+  When only the fourth number changes (for example 1.3.0.4 to 1.3.0.5), the mod still loads without a new tag.
+  If the look breaks, export it again with a newer cks.
+
+■ Before uploading
+  - Use only a picture you drew yourself or have the right to use. Other people's works and characters cannot be used.
+  - Adult content (including revealing clothing) is removed under Core Keeper's mod.io guidelines.
+  - An appearance taken in with "Fetch" in cks contains the game's own art.
+    Pugstorm has not said whether a fetched appearance may be published. Decide for yourself whether to publish it (Pugstorm can remove published mods).
+  - Core Keeper's Mod SDK terms do not allow distributing mods for commercial purposes.

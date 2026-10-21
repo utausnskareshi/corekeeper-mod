@@ -23,7 +23,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- The Zip Slip guard is internal; the tests need to reach it with a crafted archive -->
+    <!-- The tests call internal helpers directly, the Zip Slip guard among them (with a crafted archive) -->
     <InternalsVisibleTo Include="CoreKeeperSkinTool.Tests" />
   </ItemGroup>
 
@@ -60,7 +60,7 @@
       Prompt for an image generator, shown in the help so it can be copied out.
       Kept as a text file rather than inside the help JSON: it is the same English text in every
       language, and holding one copy stops the languages drifting apart. It also spares the
-      escaping that a forty-line block would need inside a JSON string.
+      escaping that a seventy-line block would need inside a JSON string.
     -->
     <EmbeddedResource Include="..\..\data\ai-prompt.txt" LogicalName="ai-prompt.txt" />
 
@@ -74,6 +74,22 @@
       LogicalName is set for the same reason, fixing the resource name to the file name.
     -->
     <EmbeddedResource Include="Localization\*.json"
+                      LogicalName="%(Filename)%(Extension)"
+                      WithCulture="false" />
+
+    <!--
+      The mod.io export (Export/ModIoExporter.cs). The scripts of the mod it writes are the files in
+      src/mod-export, carried as text and copied into every zip unchanged but for their line ends,
+      which are made LF; they are compiled by the game, never by this project. LICENSE goes along as
+      the MIT notice those scripts need wherever they are passed on. The registration memo's text,
+      one file per language, is named like the
+      language files above and needs WithCulture="false" for the same reason.
+    -->
+    <EmbeddedResource Include="..\mod-export\*.cs">
+      <LogicalName>mod-export/%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="LICENSE.txt" />
+    <EmbeddedResource Include="Localization\modio-guide.*.txt"
                       LogicalName="%(Filename)%(Extension)"
                       WithCulture="false" />
   </ItemGroup>

@@ -75,7 +75,8 @@ public sealed class PartsLayout
                 $"パーツ位置の定義の JSON を解釈できない ({ResourceName}){Environment.NewLine}  {ex.Message}", ex);
         }
 
-        // A property the file leaves out arrives as null even though it is not declared nullable,
+        // A property the file sets to null arrives as null even though it is not declared nullable
+        // (one it leaves out keeps its empty initializer and fails the Count check instead),
         // so "parts": null made the Count below a bare NullReferenceException with nothing in it
         // naming the file. The same reason PresetLibrary checks its own properties one by one.
         if (layout.Parts is null)

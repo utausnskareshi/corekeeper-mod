@@ -74,15 +74,16 @@ namespace CustomPlayerSkin.Patches
 
         /// <summary>
         /// Never let an exception propagate into the game.
-        /// This runs in the middle of the game's rendering update, so a fault of ours
-        /// A fault here must not take the game's own work down with it; losing the look is enough.
+        /// This runs in the middle of the game's rendering update, so a fault of ours must not
+        /// take the game's own work down with it; losing the look is enough.
         /// </summary>
         private static void SafeApply(PlayerController player, string origin)
         {
             try
             {
-                // Before the replacement, not after. The game has just rebuilt the layers from its
-                // own data, so this is the one moment the vanilla appearance is what is loaded.
+                // Nothing is captured inside the rebuild itself: the new art has only just been
+                // requested and lands later on a callback, so this call only schedules an attempt
+                // a moment later (SkinCapture.RebuildGraceSeconds), which Poll then makes.
                 // Told that this is a rebuild, so the capture drops any back-off it had built up:
                 // this is the one moment the appearance can have changed, and an equipment change
                 // that arrives during the back-off would otherwise go unseen for up to a minute.

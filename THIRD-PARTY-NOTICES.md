@@ -14,8 +14,8 @@ reproduced in full at the end of this file.
 ## MIT License
 
 The following packages are distributed under the MIT License. The MIT permission notice is
-reproduced in `LICENSE` in this repository and applies equally to each of them, with copyright
-held by the respective authors.
+reproduced in the `LICENSE` file that comes with this one and applies equally to each of them,
+with copyright held by the respective authors.
 
 | Package | Version | Author |
 |---------|---------|--------|
@@ -66,8 +66,8 @@ the package carries one, otherwise in the copyright field of its metadata.
 
 ## Bundled native components
 
-Some of the packages above carry native libraries built from other projects, which keep their
-own upstream licences:
+Some of the packages above, and `Avalonia.Angle.Windows.Natives`, carry native libraries built from
+other projects, which keep their own upstream licences:
 
 - **Skia**, redistributed inside the `SkiaSharp.NativeAssets.*` packages — BSD 3-Clause,
   Copyright (c) Google Inc.
@@ -159,8 +159,8 @@ The one text not taken from a package is the licence of the Inter font, which
 
 ## Licence texts
 
-Each text below is reproduced exactly as it ships inside the package named, apart from its line
-endings.
+Each text below except the Inter licence, which no package carries, is reproduced exactly as it
+ships inside the package named, apart from its line endings.
 
 ### .NET Runtime 9.0.19: `LICENSE.TXT`
 

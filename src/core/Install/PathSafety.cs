@@ -35,9 +35,9 @@ public static class PathSafety
         }
 
         // Windows silently strips trailing dots and spaces when resolving a path, so "..." and
-        // ".. " both resolve to the parent folder even though neither is spelled "..", and "X."
-        // resolves to "X". A name that changes meaning on resolution cannot be checked by
-        // spelling, so it is refused outright.
+        // ".. " both resolve to the folder they are combined with - Mods\... is Mods itself -
+        // even though neither is spelled "." or "..", and "X." resolves to "X". A name that
+        // changes meaning on resolution cannot be checked by spelling, so it is refused outright.
         if (name != name.TrimEnd('.', ' '))
         {
             throw new ToolException(
@@ -99,8 +99,8 @@ public static class PathSafety
     ///
     /// Also used as the key for de-duplicating discovered folders. Comparing the strings as
     /// typed treats "X" and "X\" as two different places, which makes the same folder appear
-    /// twice in a removal plan: the second attempt then finds it already gone and reports a
-    /// failure for a removal that in fact succeeded.
+    /// twice in a removal plan, with its files counted twice in the total shown before the user
+    /// agrees to the removal.
     /// </summary>
     public static string Normalize(string path)
     {
@@ -152,10 +152,11 @@ public static class PathSafety
     /// <summary>
     /// Follows a junction or symbolic link anywhere along the path to what it really points at.
     ///
-    /// GetFullPath resolves "..", case and trailing separators, but not a link, so one folder
-    /// reached through a junction and the same folder reached directly compared as two different
-    /// places: a removal plan listed it twice, counted its files twice, and reported the second
-    /// deletion as a failure because the first had already removed it.
+    /// GetFullPath resolves "." and "..", and the comparisons here ignore case and trailing
+    /// separators, but none of that follows a link, so one folder reached through a junction and
+    /// the same folder reached directly compared as two different places: a removal plan listed
+    /// it twice, counted its files twice, and reported the second deletion as a failure because
+    /// the first had already removed it.
     ///
     /// The whole path is walked rather than just the last segment, because that is where the
     /// link usually is not: moving a Steam library and leaving a link behind puts one near the
@@ -194,9 +195,10 @@ public static class PathSafety
     }
 
     /// <summary>
-    /// Verifies that a path sits strictly inside a root, and returns its canonical form.
+    /// Verifies that a path sits strictly inside a root, and returns it as a full path
+    /// (<c>Path.GetFullPath</c>, not the link-resolved form <see cref="Normalize"/> compares).
     /// </summary>
-    /// <exception cref="ToolException">The path resolves outside the root.</exception>
+    /// <exception cref="ToolException">The path resolves outside the root, or to the root itself.</exception>
     public static string EnsureInside(string root, string candidate, string description)
     {
         if (!IsWithin(root, candidate)
@@ -211,11 +213,6 @@ public static class PathSafety
         return Path.GetFullPath(candidate);
     }
 
-    /// <summary>
-    /// Deletes one file, clearing the read-only attribute first.
-    /// A read-only file would otherwise refuse to go, and the caller has already decided the
-    /// file is theirs to remove.
-    /// </summary>
     /// <summary>
     /// Clears the read-only attribute, if the file has one and exists.
     ///
@@ -232,6 +229,11 @@ public static class PathSafety
         }
     }
 
+    /// <summary>
+    /// Deletes one file, clearing the read-only attribute first.
+    /// A read-only file would otherwise refuse to go, and the caller has already decided the
+    /// file is theirs to remove.
+    /// </summary>
     public static void DeleteFile(string path)
     {
         FileInfo file = new(path);

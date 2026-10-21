@@ -4,7 +4,7 @@ using SkiaSharp;
 
 namespace CoreKeeperSkinTool.Sheet;
 
-/// <summary>Settings for converting a single image into a sprite sheet.</summary>
+/// <summary>Settings for converting a picture, and any per-facing pictures, into a sprite sheet.</summary>
 /// <param name="RemoveBackground">Whether to clear the background connected to the four corners.</param>
 /// <param name="BackgroundTolerance">Colour tolerance for treating a pixel as background (0-255).</param>
 /// <param name="Trim">Whether to crop automatically to the opaque bounding box.</param>
@@ -79,7 +79,7 @@ public sealed record SkinSources(SKBitmap Front, SKBitmap? Right = null, SKBitma
 /// <param name="SourceSize">Dimensions of the source image.</param>
 /// <param name="TrimmedSize">Dimensions after margins were trimmed.</param>
 /// <param name="SpriteSize">Dimensions of the art placed into the front-facing frames.</param>
-/// <param name="ClippedPixels">Number of pixels discarded for falling outside the cell.</param>
+/// <param name="ClippedPixels">The most pixels any one frame discarded for falling outside its cell.</param>
 /// <param name="BoxSize">The box the front view was fitted into.</param>
 /// <param name="RightSize">
 /// Dimensions of the art placed into the right-facing frames, or null when no picture was
@@ -144,16 +144,12 @@ public sealed record SkinBuildResult(
 public static class SkinPipeline
 {
     /// <summary>
-    /// Runs the conversion. The input bitmap is left unchanged.
-    /// A fully transparent result would make the character invisible, so it throws instead.
-    /// </summary>
-    /// <summary>
     /// Largest source image accepted, in pixels.
     ///
-    /// The same bound <see cref="PixelOps.Decode"/> applies before it allocates, which is where
-    /// it actually protects anything: by the time a bitmap reaches here it has already been
-    /// materialised. Kept as a second check because Build also accepts bitmaps that were never
-    /// decoded from a file.
+    /// The same bound <see cref="PixelOps.Decode(string, out bool)"/> applies before it
+    /// allocates, which is where it actually protects anything: by the time a bitmap reaches here
+    /// it has already been materialised. Kept as a second check because Build also accepts bitmaps
+    /// that were never decoded from a file.
     /// </summary>
     private const long MaxSourcePixels = PixelOps.MaxSourcePixels;
 
@@ -195,6 +191,10 @@ public static class SkinPipeline
         return Build(new SkinSources(source), layout, options);
     }
 
+    /// <summary>
+    /// Runs the conversion. The input bitmaps are left unchanged.
+    /// A fully transparent result would make the character invisible, so it throws instead.
+    /// </summary>
     public static SkinBuildResult Build(SkinSources sources, SheetLayout layout, SkinOptions options)
     {
         ArgumentNullException.ThrowIfNull(sources);
@@ -445,7 +445,7 @@ public static class SkinPipeline
                     arguments,
                     $"{empty.Name}のコマに絵が1つも入らなかった（水平 {resolved.OffsetX} / 垂直 {resolved.OffsetY}、" +
                     $"配置サイズ {resolved.BoxWidth}x{resolved.BoxHeight}）。" + Environment.NewLine +
-                    $"  このまま進めると、{empty.Name}を向いたときにキャラクターが消える。" + Environment.NewLine +
+                    "  このまま進めると、その向きを向いたときにキャラクターが消える。" + Environment.NewLine +
                     "  位置調整・配置サイズ・向き別の絵の縦横比のいずれかで、絵がコマから外れている。");
             }
 
@@ -549,9 +549,10 @@ public static class SkinPipeline
     /// </param>
     /// <param name="facing">The Japanese name, for the written message the command line prints.</param>
     /// <param name="maxScaledWidth">
-    /// How far from its own centre this facing's art can be and still land inside a cell. Columns
-    /// beyond it are cut before the scaling rather than after, because it is the scaling that
-    /// would have had to hold them: see the comment at the resize.
+    /// How wide this facing's art is worth scaling to: a column further than half of this from
+    /// its centre cannot land inside a cell. Columns beyond that are cut before the scaling rather
+    /// than after, because it is the scaling that would have had to hold them: see the comment at
+    /// the resize.
     /// </param>
     private static SKBitmap? PrepareSide(
         SKBitmap? source, SkinOptions resolved, int frontHeight, int maxScaledWidth,
@@ -626,11 +627,13 @@ public static class SkinPipeline
             current = Replace(current, b => PixelOps.ResizeToHeight(b, frontHeight, resolved.Resample));
             current = Replace(current, b => PixelOps.HardenAlpha(b, resolved.AlphaThreshold));
 
-            // Checked after the shrink, which is where a picture can be lost without either of
-            // the existing guards noticing. The one above looks at the picture as it arrived, and
-            // the one over the finished sheet only fires when the whole sheet is empty - so art
-            // made of fine lines came through as thirteen blank frames, reported as a success.
-            // In game that is a character who vanishes whenever they face that way.
+            // Checked after the shrink, which is where a picture can be lost without the guard
+            // above noticing: it looks at the picture as it arrived. When this was added, the one
+            // check over the finished sheet fired only when the whole sheet was empty - so art made
+            // of fine lines came through as thirteen blank frames, reported as a success. In game
+            // that is a character who vanishes whenever they face that way. The per-facing check
+            // after the placement now stops that too, but its message points at the placement
+            // rather than at the shrink.
             if (Array.TrueForAll(current.Pixels, p => p.Alpha == 0))
             {
                 throw new ToolException(

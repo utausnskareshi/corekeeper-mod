@@ -17,8 +17,9 @@ namespace CustomPlayerSkin
     /// game draws it, which is how "apply to this character only" works.
     ///
     /// Multiplayer assumes every participant has installed the same mod. Only the local player is
-    /// replaced by default; the <c>localPlayerOnly</c> setting opens it up to everyone on screen,
-    /// and even then a player whose character has no image here keeps their own appearance.
+    /// replaced by default; turning the <c>localPlayerOnly</c> setting off opens it up to everyone
+    /// on screen, and even then a player whose character has no image here keeps their own
+    /// appearance.
     /// </summary>
     public class CustomPlayerSkinMod : IMod
     {
@@ -29,7 +30,7 @@ namespace CustomPlayerSkin
         /// build before a fix meant comparing the loader's working copy of the scripts by hand.
         /// Raise it whenever what the mod does changes.
         /// </summary>
-        public const string ModVersion = "0.4.1";
+        public const string ModVersion = "0.4.3";
 
         /// <summary>Directory holding the settings and images, relative to the game's mod settings area.</summary>
         public const string RootDirectory = ModName + "/";
@@ -46,8 +47,8 @@ namespace CustomPlayerSkin
         /// <summary>
         /// One character's image as it currently stands on disk.
         ///
-        /// A character with no image is cached too, with a null texture, so that a character
-        /// being drawn every frame does not mean a filesystem lookup every frame.
+        /// A character with no image is cached too, with a null texture, so that every rebuild of
+        /// that character's look does not mean another filesystem lookup.
         /// </summary>
         private sealed class SkinEntry
         {
@@ -72,10 +73,11 @@ namespace CustomPlayerSkin
             public int ConsecutiveFailures;
 
             /// <summary>
-            /// When this character was last drawn, so entries for characters that have gone can
-            /// be dropped. Without it the dictionary only ever grew: in multiplayer, with
-            /// localPlayerOnly turned off, every character ever rendered stayed in it for the
-            /// rest of the session, was stat'ed on every poll, and kept its texture resident.
+            /// When this character's look was last rebuilt, or when the expiry check last found it
+            /// on screen, so entries for characters that have gone can be dropped. Without it the
+            /// dictionary only ever grew: in multiplayer, with localPlayerOnly turned off, every
+            /// character ever rendered stayed in it for the rest of the session, was stat'ed on
+            /// every poll, and kept its texture resident.
             /// </summary>
             public float LastSeen;
         }
@@ -401,12 +403,13 @@ namespace CustomPlayerSkin
                         }
 
                         // Dropping an entry that still has a texture has to be followed by a
-                        // rebuild. LastSeen is only touched by SkinFor, and SkinFor is reached
-                        // from the equipment-changed and respawn hooks - not from anything that
-                        // runs every frame - so a character standing still goes "unseen" while
-                        // being drawn the whole time. Destroying its texture then left the
-                        // material still set to use a replacement that no longer existed, and
-                        // the body rendered white until something else forced a rebuild.
+                        // rebuild. Apart from the on-screen check above, LastSeen is only touched
+                        // by SkinFor, and SkinFor is reached from the equipment-changed and respawn
+                        // hooks - not from anything that runs every frame - so before that check a
+                        // character standing still went "unseen" while being drawn the whole time.
+                        // Destroying its texture then left the material still set to use a
+                        // replacement that no longer existed, and the body rendered white until
+                        // something else forced a rebuild.
                         //
                         // Marking it changed sends it through the same path a deleted image
                         // takes, which re-reads the file and puts the character back as it was.
@@ -474,7 +477,7 @@ namespace CustomPlayerSkin
             return changed;
         }
 
-        /// <summary>How many times one version of an image is retried before it is given up on.</summary>
+        /// <summary>How many times one version of an image is tried before it is given up on.</summary>
         private const int MaxLoadAttempts = 3;
 
         /// <summary>
@@ -533,9 +536,8 @@ namespace CustomPlayerSkin
             {
                 // A file caught mid-write has to be retried, so the timestamp is not recorded
                 // straight away. A file that is simply not a valid PNG would otherwise be
-                // retried forever, logging and rebuilding every player's appearance on every
-                // poll, so after a few attempts this version is accepted as bad and skipped
-                // until the file changes again.
+                // read and decoded again on every poll, forever, so after a few attempts this
+                // version is accepted as bad and skipped until the file changes again.
                 if (timestamp == entry.FailedTimestamp)
                 {
                     entry.FailureCount++;

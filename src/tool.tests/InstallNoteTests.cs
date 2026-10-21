@@ -177,10 +177,10 @@ public sealed class InstallNoteTests : IDisposable
     [Fact]
     public void 動作を保証できない版では対応版を照合と同じ粒度で示す()
     {
-        // The check matches on the first three numbers, so "1.3.0" covers every 1.3.0 build. Listed
-        // as the bare prefixes, the line read as if only those exact versions were supported; the
-        // window was changed to say "1.3.0.x" and the command line with it (fix 13), and nothing
-        // tested the command line's line (the test campaign of 2026-10-01).
+        // The check matches on the first three numbers, so "1.3.0.1" in the list covers every
+        // 1.3.0 build. Listed as written, the line read as if only those exact versions were
+        // supported; the window was changed to say "1.3.0.x" and the command line with it, and
+        // nothing tested the command line's line (the test campaign of 2026-10-01).
         LayOut(withMod: true);
         File.WriteAllBytes(
             Path.Combine(Game, "CoreKeeper_Data", "globalgamemanagers"),

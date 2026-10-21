@@ -1,6 +1,6 @@
 ﻿===============================================================================
- Core Keeper スキン作成ツール v1.3.0
- Core Keeper Skin Maker v1.3.0
+ Core Keeper スキン作成ツール v1.3.1
+ Core Keeper Skin Maker v1.3.1
 ===============================================================================
 
 Core Keeper の操作キャラクターの見た目を、好きな画像に差し替えるツールです。
@@ -51,8 +51,9 @@ only proceed by accepting it.
   ・Windows 10 / 11 (64bit)
   ・Steam 版 Core Keeper がインストール済みであること
 
-Core Keeper 1.3.0.4-511d で動作を確認しています。このツールの版の番号は、
-対応する Core Keeper の版に合わせています（v1.3.0 は Core Keeper 1.3.0 系用）。
+Core Keeper 1.3.0.6-6e73 で動作を確認しています。このツールの版の番号の
+先頭 2 つは、対応する Core Keeper の版に合わせています（3 つ目の数はツール
+自身の更新を表します。v1.3.1 は Core Keeper 1.3.0 系用）。
 
 .NET や Unity、Visual Studio などをインストールする必要はありません。
 必要なものはすべてこのフォルダに入っています。
@@ -60,8 +61,9 @@ Core Keeper 1.3.0.4-511d で動作を確認しています。このツールの�
   - Windows 10 / 11 (64-bit)
   - Core Keeper installed through Steam
 
-Checked with Core Keeper 1.3.0.4-511d. The version number of this tool follows
-the Core Keeper version it is made for (v1.3.0 is for Core Keeper 1.3.0.x).
+Checked with Core Keeper 1.3.0.6-6e73. The first two numbers of this tool's
+version follow the Core Keeper version it is made for, and the third counts the
+tool's own updates (v1.3.1 is for Core Keeper 1.3.0.x).
 
 No .NET, Unity or Visual Studio installation is required. Everything needed is
 contained in this folder.
@@ -81,7 +83,7 @@ contained in this folder.
   1. Extract this zip somewhere you can write to (your desktop or documents
      folder is fine; it does not need to go inside the game folder)
   2. Run cks-gui.exe
-  3. If the bar at the top says the mod is not installed, press "Install mod"
+  3. If the status bar at the top says the mod is not installed, press "Install mod"
   4. From there, follow the screen and the built-in "Help"
 
 くわしい説明はすべてアプリ内の「ヘルプ」にあります。
@@ -214,15 +216,14 @@ Keeper is installed - the folder that contains CoreKeeper.exe.
  やめるとき / Removing it
 -------------------------------------------------------------------------------
 
-  1. キャラクターの一覧でチェックを入れてから、アプリの右下「ゲームから削除」を
-     押します。チェックしたキャラクターの見た目が元に戻ります（1体もチェックして
-     いないと、このボタンは押せません）
-  2. アプリの右上「MOD を削除」で、ゲームから MOD 本体を取り除きます
-  3. このフォルダごと削除します
+  1. アプリの右上「MOD を削除」を押します。ゲームに入れた MOD 本体と一緒に、
+     各キャラクターへ反映した画像、ゲームから取り込んだ見た目、MOD の設定も
+     取り除かれ、どのキャラクターも元の見た目に戻ります
+  2. このフォルダごと削除します
 
 設定はこのフォルダの中だけに保存されます（portable.txt があるため）。
-上の1と2を済ませてからこのフォルダを消せば、このアプリと MOD が保存したものは何も
-残りません。MOD 本体はゲームのフォルダ側にあるため、1と2を飛ばしてこのフォルダだけ
+上の1を済ませてからこのフォルダを消せば、このアプリと MOD が保存したものは何も
+残りません。MOD 本体はゲームのフォルダ側にあるため、1を飛ばしてこのフォルダだけ
 消すと、ゲームに MOD が残ったうえ、アプリから削除する手段も無くなります。
 
 ただし Windows の一時フォルダ（%TEMP%）には、ゲームが MOD を読み込むときに作る
@@ -232,20 +233,21 @@ Keeper is installed - the folder that contains CoreKeeper.exe.
 また、アプリのフォルダ（このフォルダ）に書き込めない状態でエラーが起きると、
 その記録（cks-gui-error.log）も %TEMP% に書きます。これも消して構いません。
 
-  1. "Remove from game" at the bottom right restores the original appearance of
-     the ticked characters. Tick at least one, or the button stays disabled
-  2. "Remove mod" at the top right takes the mod itself out of the game
-  3. Delete this folder
+  1. Press "Remove mod" at the top right. It takes the mod out of the game,
+     along with its settings, every character's applied picture and every
+     captured appearance, so every character gets its own look back
+  2. Delete this folder
 
 Settings are kept inside this folder only (that is what portable.txt does), so
-once steps 1 and 2 are done, deleting the folder leaves nothing this application
-or the mod saved. The mod itself lives in the game folder, so deleting this
-folder alone would leave it there with no way left to remove it.
+once step 1 is done, deleting the folder leaves nothing this application or the
+mod saved. The mod itself lives in the game folder, so deleting this
+folder alone would leave it there, with no application left to remove it.
 
 Windows' temporary folder (%TEMP%) does keep two things, though: the working
-copy the game makes when it loads the mod (Pugstorm\Core Keeper\ModLoader\
-CustomPlayerSkin), and the parts this application unpacks when it starts
-(.net\cks-gui and .net\cks). Both are temporary files and safe to delete.
+copy the game makes when it loads the mod
+(Pugstorm\Core Keeper\ModLoader\CustomPlayerSkin), and the parts this
+application unpacks when it starts (.net\cks-gui and .net\cks). Both are
+temporary files and safe to delete.
 If an error occurs while this application's folder cannot be written to, its
 record (cks-gui-error.log) goes to %TEMP% as well; that is safe to delete too.
 

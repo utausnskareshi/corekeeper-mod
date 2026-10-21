@@ -3,9 +3,10 @@ using System.Text.RegularExpressions;
 namespace CoreKeeperSkinTool.Gui.Tests;
 
 /// <summary>
-/// Two things about how the window re-reads the game and the mod, read from the source: the
-/// main view model looks for the real Steam install and the real game when it is built, so it
-/// cannot be built here without touching the user's own machine.
+/// How the window re-reads the game and the mod, along with the fetched character's name and the
+/// canvas's scroll on focus, read from the source: the main view model looks for the real Steam
+/// install and the real game when it is built, so it cannot be built here without touching the
+/// user's own machine.
 /// </summary>
 public sealed class EnvironmentRefreshTests
 {
@@ -36,7 +37,7 @@ public sealed class EnvironmentRefreshTests
     {
         // Every branch that says the mod is not installed has to say it is not outdated either.
         // The two that return early did not, so a game folder that went missing - "自動検出に戻す"
-        // with the game only findable by hand - left "MOD を更新" on screen under "ゲームが見つかりません".
+        // with the game only findable by hand - left "MOD を更新" on screen under env.gameNotFound.
         string body = Body(ViewModelSource(), "public void RefreshEnvironment()");
 
         int notInstalled = Regex.Matches(body, @"IsModInstalled\s*=\s*false;").Count;

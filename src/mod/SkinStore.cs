@@ -34,9 +34,11 @@ namespace CustomPlayerSkin
         /// that cannot happen is a reason to try again later rather than to stop the game.
         /// </summary>
         /// <returns>
-        /// False when the write threw. The game handles some failures itself - an IOException that
-        /// outlasts its retries, a full disk - by logging "Write failed" and returning (measured on
-        /// 1.3.0.2), so true means nothing was raised, not that the bytes are certain to be on disk.
+        /// False when the write threw. The game handles some failures itself by logging an error
+        /// and returning (measured on 1.3.0.2): a file another program holds open, after ten
+        /// one-second retries ("Writing ... failed after timeout"), and other IOExceptions such as
+        /// a full disk ("Write failed"). So true means nothing was raised, not that the bytes are
+        /// certain to be on disk.
         /// </returns>
         public static bool Write(string path, byte[] bytes)
         {
@@ -72,8 +74,9 @@ namespace CustomPlayerSkin
         /// Whether the file is there.
         ///
         /// A read failure is reported as <see cref="FileState.Unknown"/> rather than as "missing".
-        /// The caller treats "missing" as "the user removed the image, restore the vanilla look",
-        /// which would be the wrong response to a transient error.
+        /// Every caller acts on "missing": the image reload as "the user removed the image, restore
+        /// the vanilla look", the two settings checks as "the file is gone, use the registered
+        /// default". Either would be the wrong response to a transient error.
         /// </summary>
         public static FileState Exists(string path)
         {

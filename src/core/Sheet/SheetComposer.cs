@@ -14,7 +14,7 @@ public enum AnimationStyle
     Bob,
 
     /// <summary>
-    /// Shift the art and squash or stretch it by a pixel.
+    /// Shift the art and squash or stretch it by a pixel or a few.
     /// A walk built from one picture reads as walking rather than as the same image sliding
     /// up and down, at the cost of the outline shifting slightly between frames.
     /// </summary>
@@ -54,10 +54,11 @@ public sealed record PlacementOptions(
 /// The pictures a sheet is built from, one per facing the game draws.
 ///
 /// Only the front is required, and on its own it behaves exactly as a single picture always has:
-/// placed into every frame, mirrored for the side and with its face blanked for the back. The
-/// other two exist because the game's own character is drawn differently from each side - its
-/// side view is two pixels narrower than its front - and a real drawing of that reads better at
-/// this size than the front view turned sideways.
+/// placed into every frame, mirrored for the side if MirrorSideFrames asks for it, and with its
+/// face blanked for the back unless HideFaceOnBackFrames is off. The other two exist because the
+/// game's own character is drawn differently from each side - its side view is two pixels
+/// narrower than its front - and a real drawing of that reads better at this size than the front
+/// view turned sideways.
 /// </summary>
 /// <param name="Front">Facing the camera. Used for any facing that has no picture of its own.</param>
 /// <param name="Right">Facing right. The game mirrors these frames for walking left.</param>
@@ -70,7 +71,10 @@ public sealed record DirectionalArt(SKBitmap Front, SKBitmap? Right = null, SKBi
 
 /// <summary>The composition result together with any problems detected along the way.</summary>
 /// <param name="Sheet">The generated sprite sheet.</param>
-/// <param name="ClippedPixels">Pixels discarded for falling outside the cell; anything above zero means the art is too large.</param>
+/// <param name="ClippedPixels">
+/// The most pixels any one frame discarded for falling outside its cell; anything above zero means
+/// the art is too large for the cell or the offsets pushed it out.
+/// </param>
 /// <param name="RightClippedSideways">
 /// The most pixels any frame drawn from the supplied right-facing picture lost past the left or
 /// right edge of its cell; 0 when there is no such picture.
@@ -83,7 +87,7 @@ public sealed record DirectionalArt(SKBitmap Front, SKBitmap? Right = null, SKBi
 public sealed record ComposeResult(
     SKBitmap Sheet, int ClippedPixels, int RightClippedSideways = 0, int UpClippedSideways = 0);
 
-/// <summary>Builds a sprite sheet from a single picture.</summary>
+/// <summary>Builds a sprite sheet from one picture, or from one picture per facing.</summary>
 public static class SheetComposer
 {
     /// <summary>
@@ -131,8 +135,10 @@ public static class SheetComposer
         }
 
         // The feet stay planted through most of the animations, so the art is anchored at the
-        // foot line and this is usually zero. Sitting is the exception: the game lifts the
-        // character off the floor, by one pixel facing the camera and three facing away.
+        // foot line and this is usually zero. Sitting is the main exception: the game lifts the
+        // character off the floor, by one pixel facing the camera or to the side and three facing
+        // away. Five of the six right-facing run frames also end a row above the idle pose, so the
+        // art rises by a pixel there too.
         int currentBottom = current.Y + current.H - 1;
         int neutralBottom = neutral.Y + neutral.H - 1;
 
@@ -163,17 +169,18 @@ public static class SheetComposer
     }
 
     /// <summary>
-    /// Builds the sheet by placing the same art into every frame.
-    /// Art is anchored to the standing reference (foot line and horizontal centre); anything outside the cell is clipped.
-    /// Drawing is always clipped to the cell rectangle so neighbouring frames stay clean.
-    /// </summary>
-    /// <summary>
     /// Composes from a single picture, which is placed into every frame.
     /// Kept as the way most callers arrive: one drawing of a character, seen from the front.
     /// </summary>
     public static ComposeResult Compose(SheetLayout layout, SKBitmap sprite, PlacementOptions options) =>
         Compose(layout, new DirectionalArt(sprite), options);
 
+    /// <summary>
+    /// Builds the sheet by placing the art into every frame: the picture supplied for that facing,
+    /// or else the front picture (mirrored, or with the face hidden, when the options ask for it).
+    /// Art is anchored to the standing reference (foot line and horizontal centre); anything outside the cell is clipped.
+    /// Drawing is always clipped to the cell rectangle so neighbouring frames stay clean.
+    /// </summary>
     public static ComposeResult Compose(SheetLayout layout, DirectionalArt art, PlacementOptions options)
     {
         ArgumentNullException.ThrowIfNull(art);
@@ -288,13 +295,11 @@ public static class SheetComposer
     /// The unmodified sprite is returned as-is when nothing changes shape, so a static sheet
     /// costs exactly what it did before and the original is never disposed by this method.
     /// </summary>
-    /// <param name="mirrored">
-    /// Whether this is the mirrored copy. The cache is keyed by size, so the copies must not
-    /// share entries: a mirrored variant handed to an unmirrored frame would face the wrong way.
-    /// </param>
-    /// <param name="backFacing">
-    /// Whether this is the copy with the head filled in. Same reason as above - handing it to a
-    /// front-facing frame would put the back of the head on the character's face.
+    /// <param name="sourceId">
+    /// Which picture the sprite is, as <see cref="SourceFor"/> numbers it. The cache is keyed by it
+    /// as well as by size, so copies made from different pictures never share an entry: a mirrored
+    /// variant handed to an unmirrored frame would face the wrong way, and the copy with the head
+    /// filled in, handed to a front-facing frame, would put the back of the head on the face.
     /// </param>
     private static SKBitmap VariantFor(
         SKBitmap sprite,
@@ -322,7 +327,7 @@ public static class SheetComposer
             return existing;
         }
 
-        // Nearest neighbour: the change is a single pixel, and interpolating it would soften
+        // Nearest neighbour: the change is a pixel or a few, and interpolating it would soften
         // edges that the alpha threshold was just used to sharpen.
         SKBitmap variant = PixelOps.ResizeExact(sprite, width, height, ResampleMode.Nearest);
         cache[(sourceId, width, height)] = variant;
@@ -333,8 +338,8 @@ public static class SheetComposer
     /// Which picture a frame is drawn from, and a number identifying it for the variant cache.
     ///
     /// Art supplied for a direction always wins. What is left is the older behaviour: the front
-    /// view mirrored for the side-facing frames, and the front view with its face blanked for
-    /// the ones that show the character's back.
+    /// view, mirrored for the side-facing frames if MirrorSideFrames asks for it, and with its
+    /// face blanked for the ones that show the character's back unless HideFaceOnBackFrames is off.
     /// </summary>
     private static (SKBitmap Sprite, int SourceId) SourceFor(
         string direction, DirectionalArt art, SKBitmap? mirrored, SKBitmap? backFacing) =>
@@ -387,10 +392,10 @@ public static class SheetComposer
         SKColor[] canvas = guide.Pixels;
         int width = layout.Texture.Width;
 
-        SKColor cellBorder = new(0, 200, 255, 90);      // コマの境界
-        SKColor standingArea = new(255, 0, 200, 70);    // 立ち姿の推奨範囲
-        SKColor baseline = new(255, 220, 0, 180);       // 足元の高さ
-        SKColor centerLine = new(255, 220, 0, 90);      // 水平中心
+        SKColor cellBorder = new(0, 200, 255, 90);      // frame borders
+        SKColor standingArea = new(255, 0, 200, 70);    // recommended standing area
+        SKColor baseline = new(255, 220, 0, 180);       // foot line
+        SKColor centerLine = new(255, 220, 0, 90);      // horizontal centre
 
         void Plot(int x, int y, SKColor color)
         {

@@ -301,7 +301,8 @@ public sealed class SkinPipelineTests
     public void 実測データ_歩行コマの足元は上下に動かない()
     {
         // Measured from the game: the body's foot line never moves through run_down or run_up,
-        // and drops by exactly one pixel in run_right. Anything else is invented motion.
+        // and rises by exactly one pixel (row 22 to 21) after the first frame of run_right.
+        // Anything else is invented motion.
         PartsLayout parts = PartsLayout.LoadEmbedded();
         PartPlacement body = parts.Part("body")!;
 
@@ -365,16 +366,16 @@ public sealed class SkinPipelineTests
         }
     }
     [Theory]
-    // 正方形の絵を正方形の枠へ入れれば助言は出ない（枠の高さを変えても同じ）
+    // A square picture in a square box gets no advice, whatever the box's height
     [InlineData(16, 16, 16, 16, false)]
     [InlineData(10, 10, 10, 10, false)]
-    // 既定の枠 16x19 に対し、比 0.6〜0.7 の絵は「十分に使えている」
+    // Against the default 16x19 box, a picture of ratio 0.6 to 0.7 uses it well enough
     [InlineData(12, 19, 16, 19, false)]
-    // 枠よりはっきり細い絵だけが助言の対象
+    // Only a picture clearly narrower than the box gets the advice
     [InlineData(8, 19, 16, 19, true)]
-    // 枠の高さを縮めても、絵と枠の比が同じなら助言は出ない
+    // A picture with the same proportions as the box gets no advice
     [InlineData(8, 10, 16, 20, false)]
-    // 寸法が取れていないときは何も言わない
+    // Nothing is said when the size is not known
     [InlineData(12, 19, 0, 0, false)]
     public void UsesLittleOfBox_絵と枠の縦横比を比べて判定する(
         int spriteWidth, int spriteHeight, int boxWidth, int boxHeight, bool narrow)

@@ -19,7 +19,7 @@ public sealed record HelpTerm(string Term, string Description);
 /// </remarks>
 /// <param name="PromptResource">
 /// Name of an embedded text file shown verbatim, in a block the reader can copy. Null for the
-/// sections that are only prose. This exists for text that has to survive being copied out
+/// sections without such a block. This exists for text that has to survive being copied out
 /// unchanged, which wrapped paragraphs do not.
 /// </param>
 public sealed record HelpSection(

@@ -8,7 +8,8 @@ namespace CoreKeeperSkinTool.Gui.Tests;
 /// Both acted without a word on frames or colours the user was not looking at: the fill, over
 /// every frame, flooded the background of frames where the clicked spot held something else, and
 /// the picker took a transparent pixel as the pen's colour, which then erased (the test campaign
-/// of 2026-10-01). Read off the view model's source, which needs the real game to be built.
+/// of 2026-10-01). Read off the view model's source, because the view model looks for the real
+/// game as it is built.
 /// </summary>
 public sealed class EditToolMessageTests : IDisposable
 {

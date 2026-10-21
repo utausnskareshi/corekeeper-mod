@@ -99,9 +99,11 @@ public sealed class SourceOverwriteTests : IDisposable
     [Fact]
     public void 同じ絵を正面と側面に渡すのは許す()
     {
-        // Not a mistake: handing the front picture to --side is how a drawing is kept from being
-        // mirrored on the right-facing frames, which is what the help says --side does. A guard
-        // that refused every repeated path would take that away.
+        // Only the output is checked against the inputs, so naming one picture twice is allowed.
+        // It can be useful - passing the front to --back keeps its face on the back frames, which
+        // is what the help says --back does - and a guard that refused every repeated path would
+        // take that away. (--side has no such use: generate never mirrors the front into the
+        // right-facing frames.)
         string front = Picture("front.png", 40, 60, SKColors.Red);
         string output = Path.Combine(_work, "sheet.png");
 

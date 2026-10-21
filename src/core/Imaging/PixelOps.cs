@@ -5,7 +5,10 @@ namespace CoreKeeperSkinTool.Imaging;
 /// <summary>Interpolation used when scaling.</summary>
 public enum ResampleMode
 {
-    /// <summary>Area averaging; the default, and best for shrinking photos and illustrations.</summary>
+    /// <summary>
+    /// Bicubic (Mitchell) interpolation; the default, and the better choice for photos and
+    /// illustrations.
+    /// </summary>
     Smooth,
 
     /// <summary>Nearest neighbour; suits pixel art scaled by an integer factor.</summary>
@@ -466,10 +469,11 @@ public static class PixelOps
     /// <summary>
     /// Returns a copy with the head filled in, for the frames that show the character's back.
     ///
-    /// One picture is placed into all thirty-nine frames, so the face drawn for the front ends
-    /// up on the back of the head as well - eyes and all. The game's own character does not do
-    /// that: measured from it, the back-facing frames carry no eyes at all, and the hair reaches
-    /// two pixels further down than it does at the front, covering where the face would be.
+    /// Unless a picture is supplied for the back, the front picture goes into those frames too,
+    /// so the face drawn for the front ends up on the back of the head as well - eyes and all.
+    /// The game's own character does not do that: measured from it, the back-facing frames carry
+    /// no eyes at all, and the hair reaches two pixels further down than it does at the front,
+    /// covering where the face would be.
     ///
     /// This reproduces that. The head is taken as the top 55% of the art, which is where those
     /// measurements put the hair on a back-facing frame, and every pixel there is replaced with
@@ -500,7 +504,8 @@ public static class PixelOps
         // Only the interior counts. At this size the outline is a large share of the picture -
         // on a spiky-haired character the top rows are mostly outline - so tallying every pixel
         // picked the outline colour and filled the whole head with black, which is worse than
-        // the face it was replacing. The pixels sampled are exactly the pixels replaced.
+        // the face it was replacing. The pixels sampled pass the same test as the pixels
+        // replaced, though only over the top quarter.
         int sampleRows = Math.Max(1, (int)Math.Round(bounds.Height * 0.25));
         Dictionary<uint, int> tally = [];
 
@@ -891,7 +896,7 @@ public static class PixelOps
 
             if (targetBucket < 0)
             {
-                break; // これ以上分割できない
+                break; // No bucket can be split any further
             }
 
             List<int> source = buckets[targetBucket];
@@ -947,7 +952,7 @@ public static class PixelOps
 
             if (half <= 0 || half >= source.Count)
             {
-                break; // このバケットは単色で、これ以上分割できない
+                break; // No change of value along this channel, so there is nowhere to cut
             }
 
             buckets[targetBucket] = source[..half];

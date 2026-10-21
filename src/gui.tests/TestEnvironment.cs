@@ -4,7 +4,7 @@ using CoreKeeperSkinTool.Gui.Localization;
 // The language tests share process-wide state: the Loc singleton and the environment variable
 // that redirects the settings file. Running classes in parallel therefore lets one class observe
 // or overwrite another's settings, which showed up as an intermittent failure. This assembly is
-// small and finishes in well under a second, so serialising it costs nothing.
+// small and finishes in a second or two, so serialising it costs next to nothing.
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace CoreKeeperSkinTool.Gui.Tests;

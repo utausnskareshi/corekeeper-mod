@@ -27,7 +27,10 @@ public sealed class CommandLine
     /// </summary>
     /// <param name="args">The raw argument list.</param>
     /// <param name="aliases">Maps a short name to its full name, for example <c>i</c> to <c>input</c>.</param>
-    /// <param name="valueOptions">Full names of options that take a value; anything else is treated as a flag.</param>
+    /// <param name="valueOptions">
+    /// Full names of options that take a value. A name in neither this set nor
+    /// <paramref name="knownFlags"/> is rejected as an unknown option.
+    /// </param>
     /// <param name="knownFlags">Full names of options that take no value.</param>
     public static CommandLine Parse(
         IReadOnlyList<string> args,

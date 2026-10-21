@@ -637,7 +637,7 @@
 
     <!-- Actions -->
     <Border Grid.Row="3" Padding="10" Background="#22000000">
-      <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
         <StackPanel Grid.Column="0" VerticalAlignment="Center">
           <!-- Said until the picture is replaced, not once. A warning in the status line is
                overwritten by the next thing that happens, and this one has to outlive that:
@@ -647,14 +647,20 @@
                      Text="{loc:Tr status.truncatedBanner}" />
           <TextBlock TextWrapping="Wrap" Text="{Binding Status}" />
         </StackPanel>
-        <Button Grid.Column="1" x:Name="SaveButton" Padding="14,6" Margin="8,0"
+        <!-- Writes a zip to upload to mod.io by hand. Needs only the picture: not the game, the mod
+             or a ticked character, since the mod it writes is for whoever installs it. -->
+        <Button Grid.Column="1" x:Name="ExportModIoButton" Padding="14,6" Margin="8,0,0,0"
+                IsEnabled="{Binding HasDocument}"
+                Content="{loc:Tr action.exportModIo}"
+                ToolTip.Tip="{loc:Tr action.exportModIoTip}" />
+        <Button Grid.Column="2" x:Name="SaveButton" Padding="14,6" Margin="8,0"
                 IsEnabled="{Binding HasDocument}"
                 Content="{loc:Tr action.save}" />
-        <Button Grid.Column="2" x:Name="InstallButton" Padding="14,6" Margin="0,0,8,0"
+        <Button Grid.Column="3" x:Name="InstallButton" Padding="14,6" Margin="0,0,8,0"
                 IsEnabled="{Binding CanInstallToGame}"
                 Content="{loc:Tr action.install}"
                 ToolTip.Tip="{loc:Tr action.installTip}" />
-        <Button Grid.Column="3" x:Name="UninstallButton" Padding="14,6"
+        <Button Grid.Column="4" x:Name="UninstallButton" Padding="14,6"
                 IsEnabled="{Binding HasSelectedCharacters}"
                 Content="{loc:Tr action.uninstall}"
                 ToolTip.Tip="{loc:Tr action.uninstallTip}" />

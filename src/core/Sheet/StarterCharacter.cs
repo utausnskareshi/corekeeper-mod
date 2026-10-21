@@ -30,10 +30,13 @@ public sealed record StarterPart(string Part, SKColor Fill, SKColor Edge, bool O
 public static class StarterCharacter
 {
     /// <summary>
-    /// Drawn back to front, in the order the game layers them: trousers and shirt over the bare
-    /// body, armour over those, then hair, then the helmet on top of the hair, and finally the
-    /// eyes. A helmet covering the hair is what the game does too - it swaps in a cropped hair
-    /// sprite whenever one is worn.
+    /// Drawn back to front, in the order the game layers them
+    /// (<see cref="Install.CapturedSkins.DrawOrder"/>): hair over the bare body, trousers and
+    /// shirt over that, armour over those and the helmet on top. So where the hair's box reaches
+    /// down into the shirt's - on every back-facing frame, among others - the shirt covers it.
+    /// The eyes alone come last: the game draws them under the hair, but a solid box of hair
+    /// would hide them. A helmet covering the hair is what the game does too - it swaps in a
+    /// cropped hair sprite whenever one is worn.
     /// </summary>
     private static readonly StarterPart[] Parts =
     [
@@ -53,7 +56,8 @@ public static class StarterCharacter
     ];
 
     /// <summary>
-    /// Rough area a held weapon or tool covers, as a fraction of the frame.
+    /// Tint for the rough area a held weapon or tool covers. The area itself, as a fraction of
+    /// the frame, is set in <see cref="DrawHeldItemHint"/>.
     ///
     /// Held items are drawn by a different mechanism from the character layers and are not part
     /// of the measurements, so this is an estimate rather than something read from the game. It
@@ -87,10 +91,11 @@ public static class StarterCharacter
             // After the parts, which is what its "only where the frame is still empty" test is
             // written for. Drawn first, that test ran against a blank frame and was always true:
             // the hint covered the whole rectangle and was then buried. The image came out the
-            // same either way only because every starter colour is fully opaque - measured, both
-            // orders give sha256 A4D51E96C261893C and 1787 hint pixels - so the guard was dead
-            // rather than wrong, and would have started showing through the moment any part was
-            // given a translucent colour.
+            // same either way because DrawBox overwrites rather than blends and no starter colour
+            // has zero alpha - measured, both orders give sha256 A4D51E96C261893C and 1787 hint
+            // pixels - so the guard was dead rather than wrong. The two orders would only differ
+            // if a part were given a fully transparent colour; a translucent one still wins over
+            // the hint in either order.
             DrawHeldItemHint(canvas, width, frame);
         }
 

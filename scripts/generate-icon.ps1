@@ -9,8 +9,8 @@
 #   src/gui/Assets/icon.png   - the same mark at 256px, for anything that wants a bitmap
 #
 # The mark is "CK" over "MOD" on the same dark ground the editor canvas uses, in the
-# skin tone the presets start from. At 16 pixels only "CK" is drawn: three letters and a
-# word underneath turn into mud at that size.
+# skin tone the presets start from. Below 32 pixels (16 and 24) only "CK" is drawn: two
+# letters and a word underneath turn into mud at that size.
 # =============================================================================
 
 $ErrorActionPreference = 'Stop'
@@ -207,7 +207,7 @@ $writer.Write([UInt16]$images.Count)
 $offset = 6 + (16 * $images.Count)
 
 foreach ($image in $images) {
-    # 0 means 256 in this field, which is why it is a single byte
+    # The field is a single byte, so 256 is written as 0
     $dimension = if ($image.Size -ge 256) { 0 } else { $image.Size }
 
     $writer.Write([Byte]$dimension)       # width

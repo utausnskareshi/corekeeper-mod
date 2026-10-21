@@ -12,7 +12,7 @@
 #   - Unity cannot be automated because it needs an account and licence activation; we explain the steps instead.
 #
 # What gets installed is recorded in .cks-dev-setup.json, and scripts/cleanup-dev.ps1
-# and only what that record lists is removed.
+# removes only what that record lists.
 # =============================================================================
 
 param(

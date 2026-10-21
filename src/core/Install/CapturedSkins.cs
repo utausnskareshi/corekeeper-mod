@@ -12,8 +12,8 @@ namespace CoreKeeperSkinTool.Install;
 /// were chosen - as small indices in the older format, as data block identifiers in the newer one -
 /// and the pixels themselves live in the game's asset bundles, tinted by a shader as they are
 /// drawn. The finished appearance therefore exists only on screen, which is why the mod is the one
-/// that writes it out: it draws each layer through the game's own material, so the colours come
-/// out resolved, and stacks the results into one image with a band per layer.
+/// that writes it out: it copies each layer's art out of the game, applies the colour lookup the
+/// shader would, and stacks the results into one image with a band per layer.
 ///
 /// The bands are kept apart rather than flattened in the game because the choice of what to
 /// include belongs here. Equipment is worn, not part of how a character looks, and someone
@@ -305,8 +305,9 @@ public static class CapturedSkins
             return bottom;
         }
 
-        // Source-over on unpremultiplied values. Scaled to 255 * 255 so the whole of it stays in
-        // integer arithmetic, with the divide done once at the end.
+        // Source-over on unpremultiplied values, in integer arithmetic: the bottom's share of the
+        // alpha is worked out first (truncated), then each channel is the alpha-weighted mean of
+        // the two, rounded to the nearest value.
         int topAlpha = top.Alpha;
         int bottomShare = bottom.Alpha * (255 - topAlpha) / 255;
         int outAlpha = topAlpha + bottomShare;

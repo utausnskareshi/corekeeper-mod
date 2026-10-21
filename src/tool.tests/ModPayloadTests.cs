@@ -133,9 +133,10 @@ public sealed class ModPayloadTests : IDisposable
     [Fact]
     public void InstallTo_サブフォルダを本物のフォルダとして展開する()
     {
-        // The payload zip is produced on Windows, where PowerShell 5.1's Compress-Archive
-        // writes entry names with a backslash. Treating those as flat names would create a
-        // file literally called "Scripts\CustomPlayerSkinMod.cs" and the mod would not load.
+        // PowerShell 5.1's Compress-Archive writes entry names with a backslash, which is why
+        // scripts/build-mod.ps1 writes the payload's entries itself with "/". A name taken as flat
+        // would create a file literally called "Scripts\CustomPlayerSkinMod.cs" and the mod would
+        // not load.
         string game = CreateGameFolder();
 
         string destination = ModPayload.InstallTo(game);
@@ -268,8 +269,8 @@ public sealed class ModPayloadTests : IDisposable
     {
         // The four settings only make sense together. Writing and swapping them one at a time
         // lets a failure on the third leave shirt and trousers hidden while helmet and armour
-        // stay visible, and IsGearHidden answers from the first file it can read — so the
-        // screen would go on claiming everything is hidden while the game draws half of it.
+        // stay visible, and since IsGearHidden calls the gear hidden only when all four say so,
+        // the screen would report it as showing while the game hides half of it.
         string mods = Path.Combine(_root, "mods-partial");
         string folder = Path.Combine(mods, "CustomPlayerSkin");
         Directory.CreateDirectory(folder);

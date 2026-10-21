@@ -36,7 +36,7 @@ public static class RandomPreset
         ArgumentNullException.ThrowIfNull(library);
         ArgumentNullException.ThrowIfNull(random);
 
-        // One hue anchors the outfit; the rest sit near it or directly opposite for the accent
+        // One hue anchors the outfit; the rest sit near it, or roughly opposite for the accent
         double outfitHue = random.NextDouble() * 360;
         double accentHue = (outfitHue + 140 + (random.NextDouble() * 80)) % 360;
         double armorHue = (outfitHue + (random.NextDouble() * 40) - 20 + 360) % 360;

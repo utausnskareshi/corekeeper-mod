@@ -141,7 +141,8 @@ public sealed class LanguageSwitchTests : IDisposable
     [Fact]
     public void 画面で使うキーがすべて訳されている()
     {
-        // A missing translation puts the key itself on screen, which is easier to miss than untranslated text.
+        // A key that no language defines puts the key itself on screen. One missing only in English
+        // shows the Japanese text instead, which this cannot see; LocalizationTests looks for that.
         Loc.Instance.Current = Language("en");
 
         string[] keys =
@@ -166,9 +167,10 @@ public sealed class LanguageSwitchTests : IDisposable
     }
 
     /// <summary>
-    /// The tool's version follows the game's (1.3.0 for Core Keeper 1.3.0.x, the user's decision of
-    /// 2026-10-02), and the window said nowhere which one was running: the number was in the file's
-    /// properties and nowhere a user looks. The title carries it, in the language of the moment.
+    /// The tool's version follows the game's (its first two numbers, 1.3 for Core Keeper 1.3, the
+    /// user's decisions of 2026-10-02 and 2026-10-21), and the window said nowhere which one was
+    /// running: the number was in the file's properties and nowhere a user looks. The title carries
+    /// it, in the language of the moment.
     /// </summary>
     [Fact]
     public void 窓の題名に版を出し言語の切り替えに従う()

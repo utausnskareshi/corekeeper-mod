@@ -641,8 +641,9 @@ public sealed class CharacterTests : IDisposable
     }
 
     /// <summary>
-    /// Writing straight to each destination in turn left the earlier characters replaced when a
-    /// later one failed, while the caller was told only that the whole operation failed.
+    /// A later character failing must leave an earlier one with a whole picture. The failure here
+    /// comes in the swap, after A's copy has already gone in (the next test says so), and the
+    /// same sheet goes in both times, so this does not show that A was left untouched.
     /// </summary>
     [Fact]
     public void Install_途中で失敗しても既存の画像を書き換えない()

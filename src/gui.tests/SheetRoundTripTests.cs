@@ -106,13 +106,13 @@ public sealed class SheetRoundTripTests
     }
 
     [Theory]
-    [InlineData(234, 156, true)]     // 保存したシートそのもの
-    [InlineData(234, 155, false)]    // 高さが1つ足りない
-    [InlineData(233, 156, false)]    // 幅が1つ足りない
-    [InlineData(234, 900, false)]    // 幅だけ一致する縦長の立ち絵
-    [InlineData(900, 156, false)]    // 高さだけ一致する横長の絵
-    [InlineData(468, 312, false)]    // ちょうど2倍
-    [InlineData(1024, 1536, false)]  // ふつうの元素材
+    [InlineData(234, 156, true)]     // a saved sheet as it is
+    [InlineData(234, 155, false)]    // one pixel short in height
+    [InlineData(233, 156, false)]    // one pixel short in width
+    [InlineData(234, 900, false)]    // a tall standing picture matching only the width
+    [InlineData(900, 156, false)]    // a wide picture matching only the height
+    [InlineData(468, 312, false)]    // exactly twice the size
+    [InlineData(1024, 1536, false)]  // an ordinary source picture
     public void 完成済みシートかどうかは寸法が両方一致するかで決まる(int width, int height, bool finished)
     {
         // Both sides have to match. An earlier version of this test wrote the rule out a second

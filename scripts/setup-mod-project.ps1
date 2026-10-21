@@ -67,8 +67,8 @@ $asmdef = '{"name":"' + $modName + '"' +
 Write-Output "asmdef を生成: $asmdefPath (参照 DLL $($precompiled.Count) 件)"
 
 # --- 2. ModBuilderSettings ---------------------------------------------------
-# Reuse the existing guid. A new identifier on every regeneration would
-# because that would break its identity on the Workshop.
+# Reuse the existing guid. A new identifier on every regeneration would break the mod's
+# identity on the Workshop.
 $modGuid = $null
 if (Test-Path $settingsPath) {
     $existing = [System.IO.File]::ReadAllText($settingsPath)

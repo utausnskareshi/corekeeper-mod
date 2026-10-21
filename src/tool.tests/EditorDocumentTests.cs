@@ -155,10 +155,10 @@ public sealed class EditorDocumentTests
         EditorDocument document = CreateDocument(SKColors.White);
         (int x, int y) = At(0, 5, 5);
 
-        // A marker outside the filled frame. Asserting only that the clicked pixel is still
-        // white proved nothing - it was white before the fill, so an empty Fill satisfied it.
-        // What the name promises is that filling with the colour already there does not run on
-        // and out of the frame, and that needs a pixel the fill must not reach.
+        // A marker outside the filled frame, in another colour. It shows only that the fill ends
+        // and leaves other colours alone: the flood walks only pixels of the clicked colour, so a
+        // white fill could not turn the red marker - or the white unused cells below - into
+        // anything else even if it ran out of the frame, and an empty Fill passes as well.
         FrameRect other = Layout.Frames[1];
         document.Paint(other.X + 3, other.YTopLeft + 3, SKColors.Red, EditScope.SingleFrame);
 
@@ -538,8 +538,8 @@ public sealed class EditorDocumentTests
     [Fact]
     public void Fill_全コマ反映でも他のコマの領域を越えない()
     {
-        // The filled region comes from the clicked frame; replaying it into another frame
-        // must be clipped the same way Paint clips, or it bleeds into the neighbouring cell.
+        // Every frame is flooded on its own, from the same spot in its cell; each flood must be
+        // clipped to its frame the same way Paint clips, or it bleeds into the neighbouring cell.
         EditorDocument document = CreateDocument();
         (int x, int y) = At(0, 3, 3);
 
@@ -1116,7 +1116,7 @@ public sealed class EditorDocumentTests
     public void ReplaceColour_コマ外を単一コマ指定で押したらそのセルだけが対象になる()
     {
         // The gaps are reachable in the whole-sheet view, so "just here" needs a bounded answer
-        // there too. It used to mean the whole texture, so turning "apply to every frame" off
+        // there too. It used to mean the whole texture, so turning "apply to all frames" off
         // and clicking a gap repainted all thirty-nine frames - the opposite of what it says.
         EditorDocument document = CreateDocument(SKColors.White);
         (int X, int Y) gap = UnusedCellSamples().First();
@@ -1213,7 +1213,7 @@ public sealed class EditorDocumentTests
     public void 図形の座標はコマをまたいで連続している()
     {
         // LinePixels knows nothing about frames - it is the caller that has to clip. Pinned here
-        // so that the clipping test below is testing the caller's work and not this one's.
+        // so that the ClipToFrame tests above are testing the caller's work and not this one's.
         FrameRect first = Layout.Frames[0];
         FrameRect second = Layout.Frames[1];
 
@@ -1261,9 +1261,10 @@ public sealed class EditorDocumentTests
     [Fact]
     public void Fill_コマがテクスチャからはみ出すレイアウトでも落ちない()
     {
-        // Nothing validates a layout's frames against its texture, and the fill checked only the
-        // frame: far enough past the end of a row it threw IndexOutOfRangeException, and short
-        // of that it quietly wrote over the next row.
+        // SheetLayout.Validate refuses a frame that runs off the texture, but a layout built or
+        // changed in code - as this one is - need not go through it, and the fill checked only
+        // the frame: far enough past the end of a row it threw IndexOutOfRangeException, and
+        // short of that it quietly wrote over the next row.
         SheetLayout overhanging = Layout with
         {
             Frames = [new FrameRect(0, "idle", "down", 0, 220, 130, 140, 26, 26)],

@@ -109,7 +109,7 @@ public sealed class DirectionalArtTests
         FrameRect frame = FrameOf("idle_right");
 
         // The mark sits on one side of the picture, so the two sheets disagree about which side
-        // of the frame it lands on unless the supplied art was left alone
+        // of the frame it lands on only if the supplied art was left alone
         Assert.NotEqual(MarkColumn(mirroredSheet, frame), MarkColumn(sideSheet, frame));
     }
 
@@ -128,7 +128,9 @@ public sealed class DirectionalArtTests
 
         using SKBitmap sheet = result.Sheet;
 
-        // Untouched: one colour throughout, rather than the two a blanked face leaves behind
+        // The back picture's colour throughout, not the front's. HideFace fills the head with the
+        // colour that dominates its top, which for a solid block is the block's own colour, so this
+        // shows that the back art was used rather than that it escaped the blanking
         Assert.Equal([SKColors.Blue], ColoursIn(sheet, FrameOf("idle_up")));
     }
 
@@ -375,12 +377,12 @@ public sealed class DirectionalArtTests
     [Fact]
     public void 横に広い側面の絵でも正面と同じ高さになる()
     {
-        // The case the test above cannot see. It makes the side view narrower than the front, so
-        // height is what limits both of them and they agree whatever the fitting does. A side
-        // view that is wider - a hat brim, a tail, an arm held out - is limited by width instead,
-        // and fitting it into a box "front height tall" then left it shorter than the front: the
-        // character lost a sixth of its height every time it turned to the right, which is the
-        // opposite of what fitting to the front's height is for.
+        // The case 側面は正面と同じ高さに縮小される, further up, cannot see. That test makes the
+        // side view narrower than the front, so height is what limits both of them and they agree
+        // whatever the fitting does. A side view that is wider - a hat brim, a tail, an arm held
+        // out - is limited by width instead, and fitting it into a box "front height tall" then
+        // left it shorter than the front: the character lost a sixth of its height every time it
+        // turned to the right, which is the opposite of what fitting to the front's height is for.
         using SKBitmap front = Solid(40, 60, SKColors.Red);
         using SKBitmap side = Solid(60, 60, SKColors.Green);
 
@@ -551,9 +553,9 @@ public sealed class DirectionalArtTests
     /// <summary>
     /// How many opaque pixels a facing's frames hold altogether - zero meaning the facing is gone.
     ///
-    /// Named for what it returns. Called EmptyFramesFor at first, which is what OpaqueByDirection
-    /// sounded like it counted and is the opposite of what it does: the one caller reads it as
-    /// "greater than zero means there is art", which under the old name read as its own negation.
+    /// Named for what it returns. Called EmptyFramesFor at first, a name for the opposite of what
+    /// OpaqueByDirection counts: the one caller reads it as "greater than zero means there is art",
+    /// which under the old name read as its own negation.
     /// </summary>
     private static int OpaquePixelsFor(SKBitmap sheet, string direction)
     {

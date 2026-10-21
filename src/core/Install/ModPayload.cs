@@ -12,7 +12,10 @@ public sealed record PayloadInfo(string Name, string DisplayName, int FileCount)
 
 /// <summary>State of the installed mod.</summary>
 /// <param name="Path">Where it is installed; null when nothing is installed.</param>
-/// <param name="Name">Name of the installed mod; null when nothing is installed.</param>
+/// <param name="Name">
+/// Name of the installed mod; null when nothing is installed, or when its manifest cannot be read
+/// or gives no name.
+/// </param>
 public sealed record InstalledModInfo(string? Path, string? Name)
 {
     public bool IsInstalled => Path is not null;
@@ -320,8 +323,8 @@ public static class ModPayload
     /// behind something the game no longer recognises as a mod.
     ///
     /// Only ever called on a folder whose contents are already known to be disposable: the
-    /// staging copy after a failed extraction, and the backup after the swap succeeded. The
-    /// recovery path reads the backup before any of this runs.
+    /// staging copy after a failed extraction or a failed swap, and the backup after the swap
+    /// succeeded. The recovery path reads the backup before any of this runs.
     ///
     /// Except when the folder is a link. A mod folder that is a junction to a working copy is
     /// moved aside as the link itself, so the "backup" holds the user's own folder, and deleting
@@ -421,9 +424,9 @@ public static class ModPayload
             // Everything carried is present and identical. The other direction counts too: a file
             // the install has and this application does not is a leftover from an older mod, and
             // the mod ships as C# source that the game compiles when it loads. A leftover compiles
-            // with the rest - a class that has since been renamed arrives twice and the mod stops
-            // loading - so it has to count as a difference. Nothing above would have noticed,
-            // because every entry the loop walks was accounted for.
+            // with the rest - a class whose file has since been renamed arrives twice and the mod
+            // stops loading - so it has to count as a difference. Nothing above would have
+            // noticed, because every entry the loop walks was accounted for.
             foreach (string existing in Directory.EnumerateFiles(installed, "*", SearchOption.AllDirectories))
             {
                 if (!carried.Contains(Path.GetRelativePath(installed, existing)))

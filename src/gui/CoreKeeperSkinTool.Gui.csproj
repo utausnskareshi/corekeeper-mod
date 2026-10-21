@@ -34,7 +34,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Localization and settings are internal; the tests need to reach them directly -->
+    <!-- Program, the settings and a few view-model helpers are internal; the tests need to reach
+         them directly -->
     <InternalsVisibleTo Include="CoreKeeperSkinTool.Gui.Tests" />
   </ItemGroup>
 

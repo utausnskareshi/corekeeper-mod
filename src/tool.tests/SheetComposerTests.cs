@@ -59,7 +59,7 @@ public sealed class SheetComposerTests
         FrameRect frame = Layout.Frames.Single(f => f.Index == 0);
         SKRectI bounds = OpaqueBoundsIn(sheet, frame);
 
-        int expectedBottom = Layout.StandingBox.BaselineY;              // 排他境界
+        int expectedBottom = Layout.StandingBox.BaselineY;              // exclusive bound
         int expectedLeft = Layout.StandingBox.CenterX - (sprite.Width / 2);
 
         Assert.Equal(expectedBottom, bounds.Bottom);
@@ -379,7 +379,7 @@ public sealed class SheetComposerTests
     {
         // The variants a moving frame needs are cached, and the back-facing set has to have its
         // own key. Sharing a key with the front-facing set put the face back onto three of the
-        // up frames - the ones whose motion changes the shape - and the checks above never saw
+        // up frames - the ones whose motion changes the shape - and the checks below never saw
         // it, because a static sheet does not build variants at all.
         SKColor skin = new(0xFE, 0xCD, 0x94);
 
@@ -425,7 +425,7 @@ public sealed class SheetComposerTests
 
             Assert.Equal(
                 frontCell.Count(p => p == SKColors.Black),
-                backCell.Count(p => p == SKColors.Black) + 2);  // 目の2画素ぶんだけ減る
+                backCell.Count(p => p == SKColors.Black) + 2);  // two fewer, for the eyes
         }
     }
 

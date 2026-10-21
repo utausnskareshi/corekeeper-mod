@@ -110,13 +110,14 @@ namespace CustomPlayerSkin
         /// <summary>
         /// The switch that decides which of the two textures the shader samples.
         ///
-        /// Read, not written. <see cref="SpriteSheetSkin.SetSkin"/> is the game's own method and
-        /// its own customization goes through it, so the art a character is actually wearing is
-        /// usually the replacement rather than the prefab's texture. Forcing the switch off - the
-        /// first attempt at this - asks for the default art instead of the chosen art.
+        /// Read, not written. The game's own <see cref="SpriteSheetSkin.ApplySkin"/> turns it on
+        /// whenever the layer has art, and the game's customization gets there when the load it
+        /// requested completes, so the art a character is actually wearing is usually the
+        /// replacement rather than the prefab's texture. Forcing the switch off - the first
+        /// attempt at this - asks for the default art instead of the chosen art.
         ///
-        /// It also means a character this tool has already replaced captures as it now looks
-        /// rather than as it looked before, which is what the button claims to fetch.
+        /// A character this mod or an exported skin is drawing over is not captured at all - see
+        /// <see cref="Capture"/> - so the file keeps the look recorded before that picture went on.
         /// </summary>
         private const string UseReplacementProperty = "_UseReplacementTex";
 
@@ -130,8 +131,9 @@ namespace CustomPlayerSkin
         /// save keeps <c>body</c> beside <c>skinColor</c>, <c>hair</c> beside <c>hairColor</c>, and
         /// so on. The sheet that gets loaded carries only the shape, drawn in whatever palette the
         /// artist used, and a <c>ColorReplacer</c> on the same object hands the shader a two-row
-        /// lookup - source colours along the top, their replacements underneath - which is what
-        /// turns that palette into this character's.
+        /// lookup - source colours in row 0 (the bottom row, as a Texture2D counts them), their
+        /// replacements in row 1 above them - which is what turns that palette into this
+        /// character's.
         ///
         /// Copying the texture alone therefore gets the shape right and every colour wrong, which
         /// is exactly what it did: the right build and hairstyle in the artist's green shirt and
@@ -218,8 +220,9 @@ namespace CustomPlayerSkin
         /// <summary>
         /// Captures the appearance of one player, if it is time to and if it can be.
         ///
-        /// Reached two ways: from the appearance rebuild, where it runs ahead of the applier, and
-        /// from <see cref="Poll"/>, where nothing follows it. Nothing here throws: a failure to
+        /// Reached three ways: from this mod's patches on the appearance rebuild and on the
+        /// player's spawn, where it runs ahead of the applier in both, and from
+        /// <see cref="Poll"/>, where nothing follows it. Nothing here throws: a failure to
         /// capture costs a feature of the tool outside, and must not cost the game its frame.
         /// </summary>
         /// <param name="rebuilt">
@@ -288,6 +291,25 @@ namespace CustomPlayerSkin
                     return;
                 }
 
+                // Nor while a skin the tool wrote for mod.io is drawing the character, for the same
+                // reason. That mod puts its picture on the body and a 1x1 transparent texture on every
+                // layer it hides, so a capture wrote the mod's look over the file the fetch button
+                // reads, and complained about each hidden layer being 1x1 on the way (measured on
+                // 1.3.0.4 with an exported skin in the Mods folder). The look recorded before stays.
+                //
+                // Inside a rebuild this can answer either way. The first time, that mod's patch
+                // has not run yet (it runs after this one), so the layers do not hold its picture.
+                // On every later rebuild the body still holds the picture from the previous
+                // application: the game only swaps the material when its own load completes, and
+                // that mod's SetSkin aborts that load. Either way nothing is captured inside a
+                // rebuild, and the question is asked again when the capture falls due.
+                if (DrawnByExportedSkin(player))
+                {
+                    NextAttempt[guid] = now + SettledIntervalSeconds;
+                    NoteExportedSkin();
+                    return;
+                }
+
                 if (rebuilt)
                 {
                     // Whatever back-off had accumulated no longer applies: the picture has just
@@ -306,9 +328,9 @@ namespace CustomPlayerSkin
                     // right here, inside the rebuild - the one moment the layers are certain to
                     // be stale, because the new art has only just been asked for and arrives on a
                     // callback. For a character this mod draws over it was worse than stale. The
-                    // entry IsReplacing asks about is dropped five minutes after the last rebuild
-                    // even while the character is on screen, and dropping it is itself what
-                    // triggers the rebuild that lands here - so IsReplacing was momentarily false
+                    // entry IsReplacing asks about was dropped five minutes after the last rebuild
+                    // even while the character was on screen, and dropping it was itself what
+                    // triggered the rebuild that lands here - so IsReplacing was momentarily false
                     // while the layers still held this mod's own picture and a transparent
                     // texture in every hidden layer. What got written was the user's own applied
                     // drawing as the body with every other band empty, and because the applier
@@ -399,6 +421,50 @@ namespace CustomPlayerSkin
             }
         }
 
+        /// <summary>
+        /// How the textures of a skin the tool writes for mod.io are named: the picture after that
+        /// mod (CksSkin_ and twelve hex digits), and the one hiding the other layers
+        /// CksSkin_Transparent (src/mod-export). A test holds this to the tool's own prefix.
+        /// </summary>
+        internal const string ExportedSkinPrefix = "CksSkin_";
+
+        /// <summary>Set once the log has been told why captures are being left alone.</summary>
+        private static bool _notedExportedSkin;
+
+        /// <summary>
+        /// Whether the body layer is drawing a skin the tool wrote for mod.io, told by the name of
+        /// the texture the shader is sampling.
+        /// </summary>
+        private static bool DrawnByExportedSkin(PlayerController player)
+        {
+            SpriteSheetSkin? body = player.bodySkin;
+            SpriteRenderer? renderer = body == null ? null : body.sr;
+            Material? material = renderer == null ? null : renderer.sharedMaterial;
+            if (body == null || material == null)
+            {
+                return false;
+            }
+
+            Texture2D? drawn = DrawnTextureFor(body, renderer, material, out string source);
+            return source == "replacement"
+                   && drawn != null
+                   && drawn.name != null
+                   && drawn.name.StartsWith(ExportedSkinPrefix, StringComparison.Ordinal);
+        }
+
+        /// <summary>Says once a session why the look is not being recorded.</summary>
+        private static void NoteExportedSkin()
+        {
+            if (_notedExportedSkin)
+            {
+                return;
+            }
+
+            _notedExportedSkin = true;
+            CustomPlayerSkinMod.Log(
+                "cks で書き出した MOD の絵が掛かっているため、取得用の見た目は記録しない（前に記録したものを残す）。");
+        }
+
         /// <summary>Forgets everything remembered, so a fresh session starts clean.</summary>
         public static void Reset()
         {
@@ -406,6 +472,7 @@ namespace CustomPlayerSkin
             LastWritten.Clear();
             Unchanged.Clear();
             Complained.Clear();
+            _notedExportedSkin = false;
             _manifestWritten = false;
             _describedLayers = false;
             _countedBands = false;
@@ -476,9 +543,12 @@ namespace CustomPlayerSkin
             // The game asks Addressables for a character's artwork and carries on: the request is
             // made in RefreshCustomization, and the answer lands later on OnLoadCompleted, which
             // is what assigns SpriteSheetSkin.skin and then calls ApplySkin to put it on the
-            // material. Between the two, the material's replacement slot is empty, the shader's
-            // switch is off, and what the shader samples - and therefore what a faithful capture
-            // reads - is the prefab's own texture, which is the game's default character.
+            // material. Between the two on a character's first load, the material's replacement
+            // slot is empty, the shader's switch is off, and what the shader samples - and
+            // therefore what a faithful capture reads - is the prefab's own texture, which is the
+            // game's default character. On a later rebuild the slot still holds the previous
+            // load's art, with the switch on, until the new one lands, so the gap shows the
+            // character as they were before rather than the default.
             //
             // This ran in the rebuild's postfix, which is exactly that gap, so every capture
             // wrote out the default: light skin, brown hair, green shirt, whoever the character
@@ -486,8 +556,10 @@ namespace CustomPlayerSkin
             // a valid sheet of the right size, so the attempt succeeded, the picture was written,
             // and the settled counter then stopped it being looked at again.
             //
-            // `skin` is the field the load fills in, so it is precisely the signal for "this is
-            // the character now" rather than "this is what was here before".
+            // `skin` is the field the load fills in, so on the first load it is precisely the
+            // signal for "this is the character now" rather than "this is what was here before".
+            // A later rebuild leaves the previous load's art in it until the new one lands, which
+            // this check cannot see; RebuildGraceSeconds and the interval after it wait that out.
             SpriteSheetSkin? bodyLayer = layers[0];
             if (bodyLayer == null || bodyLayer.skin == null)
             {
@@ -531,9 +603,10 @@ namespace CustomPlayerSkin
                         layers[band], LayerNames[band], required, width, height, stacked, band,
                         ref incomplete))
                 {
-                    // Left for the next interval: a layer still loading is the ordinary case right
-                    // after the appearance is rebuilt. Described once all the same, because a run
-                    // that keeps giving up in silence is a run that cannot be diagnosed.
+                    // Left for the next interval. Only the body can get here, and its art has
+                    // already arrived (checked above), so this is a body with no material or of the
+                    // wrong size. Described once all the same, because a run that keeps giving up
+                    // in silence is a run that cannot be diagnosed.
                     DescribeLayers(layers);
                     return;
                 }
@@ -646,12 +719,13 @@ namespace CustomPlayerSkin
             //
             // A base layer off means something is covering it: armour hides the shirt, a full helm
             // hides the hair. The game does not keep that art underneath - it clears the layer it
-            // hides, and under a helm that shows part of the hair it loads the helm's own hair in
-            // place of the character's - so what is covered cannot be read back here, and the band
-            // stays empty or holds the helm's hair. Taking the equipment off in the game is the
-            // only way to capture what it covers; the tool's help says so. A base layer still
-            // counts as soon as its art has loaded, on screen or not, which keeps a layer whose
-            // renderer is off for any other reason.
+            // hides, and under a helm that shows part of the hair it loads the hairstyle's
+            // under-helm version (HairSkinDataBlock.helmHairTexture) in place of the full one - so
+            // what is covered cannot be read back here, and the band stays empty or holds that
+            // version. Taking the equipment off in the game is the only way to capture what it
+            // covers; the tool's help says so. A base layer still counts as soon as its art has
+            // loaded, on screen or not, which keeps a layer whose renderer is off for any other
+            // reason.
             bool present = equipment ? drawn && loaded : loaded;
 
             // Drawn but not loaded means the art is still on its way. The band is left empty rather
@@ -693,9 +767,10 @@ namespace CustomPlayerSkin
             {
                 Complain($"レイヤーの寸法が想定と違う（{name}: {source.width}x{source.height}）。");
 
-                // The band is left empty rather than the capture abandoned: a layer of the wrong
-                // shape would never come right, and refusing over it would mean never writing
-                // anything at all for this character.
+                // An optional layer's band is left empty rather than the capture abandoned: a layer
+                // of the wrong shape would never come right, and refusing over it would mean never
+                // writing anything at all for this character. The body (required) still abandons
+                // it, since there is no character to write without one.
                 return !required;
             }
 
@@ -777,16 +852,20 @@ namespace CustomPlayerSkin
         /// <summary>
         /// Translates one band's colours the way the shader would.
         ///
-        /// The lookup the game builds is a two-row texture: each source colour along the top row
-        /// with the colour it becomes directly beneath it. Both rows come from the same lists the
-        /// character's chosen palette filled in, so reading the texture gives the mapping already
-        /// rounded to the byte values the art is stored in.
+        /// The lookup the game builds is a two-row texture: each source colour in row 0 (the
+        /// bottom row, as a Texture2D counts them) with the colour it becomes directly above it in
+        /// row 1. The rows hold the two lists the game hands the ColorReplacer - the source colours
+        /// and the chosen palette - so reading the texture gives the mapping already rounded to
+        /// the byte values the art is stored in.
         ///
         /// Matched on the three colour channels only. The pixel keeps its own alpha, so a
         /// half-transparent edge stays half-transparent instead of taking the palette's opacity.
         /// A colour with no entry is left exactly as it was, which is what the shader does too.
         /// </summary>
-        /// <returns>How many pixels were translated. Zero means this layer has no palette.</returns>
+        /// <returns>
+        /// How many pixels were translated. Zero when this layer has no table, the table cannot be
+        /// read or is incomplete, or none of the band's colours are in it.
+        /// </returns>
         private static int ApplyColorReplacement(Color32[] pixels, Material material, int band)
         {
             Texture2D? lookup = material.HasProperty(ColorReplaceProperty)
@@ -881,8 +960,9 @@ namespace CustomPlayerSkin
             {
                 Color32 from = table[fromRow + c];
 
-                // An unused column: the table is as wide as the longer of the two lists, so the
-                // tail of the shorter one is left transparent rather than filled in.
+                // Skipped as nothing the art could match. The table is as wide as the source list,
+                // and where the chosen palette is shorter the game repeats the source colour in the
+                // second row, so only a table built from no colours at all has an unwritten column.
                 if (from.a == 0)
                 {
                     continue;
@@ -932,8 +1012,9 @@ namespace CustomPlayerSkin
         /// The replacement comes first when the switch says the shader is sampling it, because
         /// that is where the game's own customization puts the art it loaded. The prefab's texture
         /// is next, then the two places a layer might still be remembering it. The first attempt
-        /// at this read only <see cref="SpriteSheetSkin.skin"/>, which in practice is null, so
-        /// every capture gave up on the body layer before it had drawn anything.
+        /// at this read only <see cref="SpriteSheetSkin.skin"/>, which is null until the layer's
+        /// first load has landed; that attempt ran inside the rebuild, before then, so every
+        /// capture gave up on the body layer before it had drawn anything.
         /// </summary>
         private static Texture2D? DrawnTextureFor(
             SpriteSheetSkin layer, SpriteRenderer? renderer, Material material, out string source)
@@ -971,7 +1052,10 @@ namespace CustomPlayerSkin
         }
 
         /// <summary>Says what the bands are, for the tool to check before it reads one.</summary>
-        /// <returns>True when the manifest is on disk, whether this call is what put it there.</returns>
+        /// <returns>
+        /// True once a write of the manifest has gone through without an error this session,
+        /// whether or not this call made it. Not a fresh check that the file is on disk.
+        /// </returns>
         private static bool WriteManifest()
         {
             if (_manifestWritten)

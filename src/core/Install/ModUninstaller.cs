@@ -21,7 +21,7 @@ public enum RemovalKind
     /// <summary>The mod files installed into the game.</summary>
     ModInstall,
 
-    /// <summary>Where the settings and image live.</summary>
+    /// <summary>Where the settings and the characters' images live.</summary>
     ModConfig,
 }
 
@@ -50,8 +50,10 @@ public sealed record RemovalResult(
 ///
 /// To avoid deleting an unrelated folder, only targets meeting all of the following qualify.
 ///   - it sits directly inside a known location (the game's Mods folder or the mod settings folder)
-///   - the folder name matches the mod name exactly
-/// The same conditions are re-checked at execution time before anything is deleted.
+///   - the folder name is the mod name exactly, or the mod name with the .new or .old suffix that
+///     an interrupted install leaves behind
+/// Both are re-checked at execution time before anything is deleted, the location only as far
+/// as the parent folder being named Mods (ignoring case).
 /// </summary>
 public static class ModUninstaller
 {
@@ -81,8 +83,7 @@ public static class ModUninstaller
 
         // The same folder must not enter the plan twice, however it was reached. Two spellings
         // of one game folder, or a caller passing overlapping lists, would otherwise double the
-        // file count shown before deletion and make Execute report a failure for the second
-        // copy, which by then is already gone.
+        // file count shown before deletion and show one folder as two targets.
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
         void AddTarget(string path, RemovalKind kind)
@@ -138,7 +139,7 @@ public static class ModUninstaller
     /// <summary>
     /// Executes the plan.
     ///
-    /// The settings side, holding the image, is removed first. A running game then
+    /// The settings side, holding the images, is removed first. A running game then
     /// notices within its reload interval and restores the original look. That holds for the
     /// mod as built since 2026-09-27: the game reads a setting whose file is gone as 0 rather
     /// than as its registered default (measured on 1.3.0.2), removing the settings side takes

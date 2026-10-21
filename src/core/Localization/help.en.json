@@ -18,13 +18,13 @@
         "Load a picture and it is converted automatically into the form the game needs, a 234x156 sprite sheet. You can then redraw it pixel by pixel.",
         "Neither Unity nor .NET has to be installed. Everything needed is included in the application.",
         "Only the appearance changes. Your character's stats, inventory and save data are untouched.",
-        "The version number of this application follows the Core Keeper version it is made for, and is shown in the window title: v1.3.0, for example, is the version for Core Keeper 1.3.0.x."
+        "The first two numbers of this application's version follow the Core Keeper version it is made for, and the third counts the application's own updates. The version is shown in the window title: v1.3.1, for example, is the version for Core Keeper 1.3.0.x."
       ]
     },
     {
       "heading": "Getting started",
       "paragraphs": [
-        "1. If the bar at the top says the mod is not installed, press \"Install mod\". That puts the mod into the game. If the game is running, restart it after installing.",
+        "1. If the status bar at the top says the mod is not installed, press \"Install mod\". That puts the mod into the game. If the game is running, restart it after installing.",
         "2. Choose a character from \"Preset\". To use your own picture instead, drag and drop it onto this window or press \"Open image…\".",
         "3. Check the preview on the right to see how it looks when walking and turning.",
         "4. Adjust it with the settings on the left and the pixel editor in the middle.",
@@ -32,7 +32,7 @@
         "6. Press \"Apply to game\" at the bottom right. If the game is running it updates within seconds.",
         "Each character can have its own picture. To give another character a different look, build the picture again, tick only that character, and apply it.",
         "To put one character back the way it was, tick it and press \"Remove from game\". The mod itself stays installed.",
-        "To remove the mod altogether, press \"Remove mod\" in the status bar. Every character's installed picture goes with it, and so does every appearance taken from the game; then it is back to how it was.",
+        "To remove the mod altogether, press \"Remove mod\" in the status bar. Every character's applied picture goes with it, and so does every appearance taken from the game; then it is back to how it was.",
         "Nothing can be applied while the game has no characters. Create one in Core Keeper first."
       ]
     },
@@ -40,20 +40,20 @@
       "heading": "About the presets",
       "paragraphs": [
         "Thirty characters are supplied. All of them were drawn for this application; none of the game's own artwork is used.",
-        "Some presets are assembled from parts and some are converted from a single picture. Those made from parts have every part at the position and size measured from the game's own character; those made from a picture are converted with the same default settings as a picture you open yourself. Either kind installs and displays without looking out of place.",
+        "Some presets are assembled from parts and some are converted from a single picture. Those made from parts have every part at the position and size measured from the game's own character; those made from a picture are converted with the same default settings as a picture you open yourself. Either kind can be applied as it is and displays without looking out of place.",
         "The first entry, \"Part guide\", is a diagram of which area belongs to which part. Use it as a base when drawing from scratch; the next section explains the colours.",
         "A frame is 26x26 pixels and the art occupies about 16x19 of that. Presets therefore differ from each other far more by colour than by shape."
       ],
       "terms": [
         { "term": "Preset", "description": "Choosing an entry replaces the character. Each row shows the actual appearance on the left and its category on the right, and the list is ordered by category." },
         { "term": "Random", "description": "Combines colours and shapes on the spot to make a new character. Press it as often as you like, and edit whichever result you keep." },
-        { "term": "Recolour only", "description": "Keeps the shapes you have and swaps in the colours of the selected preset, so you can try a palette without losing your work. One undo takes it back." }
+        { "term": "Recolour only", "description": "Keeps the shapes you have and swaps in the colours of the selected preset, so you can try a palette without losing your work. Choosing an entry in the list replaces the drawing straight away, so to recolour a drawing you have edited, choose the preset, undo once to get the drawing back, then press this. If you do not like the result, one undo puts the old colours back." }
       ]
     },
     {
       "heading": "Reading the colours of the part guide",
       "paragraphs": [
-        "The position and size of every part was measured from the game's own character, frame by frame. Draw over this guide and your art lands where the game expects it.",
+        "The position and size of every part were measured from the game's own character, frame by frame. Draw over this guide and your art lands where the game expects it.",
         "The bare body, hair and clothing are filled in; the equipment - helmet, chest armour, leg armour - is drawn as a frame. Filling the equipment would hide the clothing underneath completely and defeat the point of the diagram. In the game itself, equipment covers the inside of those frames too.",
         "The parts shift a little from frame to frame and between facings, because arms and legs move through the walk cycle."
       ],
@@ -93,7 +93,7 @@
         { "term": "If the result comes back photographic", "description": "Put 'simple flat icon of' in front of your {{CHARACTER}} text. That is the fix when the style returned would not survive being reduced." },
         { "term": "Settings for loading it", "description": "\"Make the background transparent\" is on by default. Leave it on for a picture that is already transparent - with transparent corners nothing is removed. Leave it on for a white or magenta background too, and set the tolerance to around 30. Leave \"Trim empty margins automatically\" on and the width and height at the default 16x19. Try \"Scale with nearest neighbour\" off first, and turn it on if the edges look soft." },
         { "term": "Why the prompt asks for a magenta background", "description": "Magenta (#FF00FF) is named as the fallback for when transparency is not possible. No character uses that colour, so the background always cuts away cleanly. A white-shirted character on a white background survives only as long as the dark outline has no gap in it; one gap and the shirt is erased along with the background." },
-        { "term": "Expect the detail to disappear", "description": "A frame is 26x26 pixels and the art occupies 16x19 of that. Thin spikes of hair, laces, buttons, a mouth or a nose will not survive. The prompt asks for them to be left out, but if they turn up anyway, tidying them in the pixel editor in the middle is worth the minute it takes." }
+        { "term": "Expect the detail to disappear", "description": "A frame is 26x26 pixels and the art occupies 16x19 of that. Thin spikes of hair, laces, buttons, a mouth or a nose will not survive. The prompt asks for most of them to be left out, but if they turn up anyway, tidying them in the pixel editor in the middle is worth the minute it takes." }
       ]
     },
     {
@@ -110,20 +110,20 @@
         "Shows at all times whether the game was found and whether the mod is installed. It also reads the game's log (Player.log): if the game could not load the mod the last time it started, the reason and what to do next appear on a second line of the bar. This is what you see when a game update has stopped the mod from working, for example. Hover over the line to see the lines from the log."
       ],
       "terms": [
-        { "term": "Install mod / Remove mod", "description": "One button does both. While the mod is absent it reads \"Install mod\" and puts the bundled mod into the game; nothing else, such as Unity or .NET, has to be installed, and if the game is running you should restart it afterwards. While the mod is present it reads \"Remove mod\" and takes out the mod and its whole settings folder, which is also where every character's installed picture and every captured appearance live, so those go too. You see the locations and file counts before anything is deleted." },
+        { "term": "Install mod / Remove mod", "description": "One button does both. While the mod is absent it reads \"Install mod\" and puts the bundled mod into the game; nothing else, such as Unity or .NET, has to be installed, and if the game is running you should restart it afterwards. While the mod is present it reads \"Remove mod\" and takes out the mod and its whole settings folder, which is also where every character's applied picture and every captured appearance live, so those go too. You see the locations and file counts before anything is deleted." },
         { "term": "Update mod", "description": "Appears only when the mod in the game differs from the one this application carries. Pressing it replaces the one in the game with this one. The settings folder is left alone, so every character's applied picture and every captured appearance survive; there is no need to remove the mod and put it back. If the game is running, restart it afterwards: the running game keeps the mod it started with." },
         { "term": "Armour, clothes and helmet: hidden / shown", "description": "Whether the game draws its own equipment over the replacement art. Hidden by default, so only your picture shows. It writes the mod settings directly, so it takes effect within seconds even while the game is running. Held weapons and tools are always shown, whichever way this is set." },
-        { "term": "Checks at start-up", "description": "Two things are checked when the application starts. First, whether Core Keeper can be found: if it cannot, the reason is shown and the application stops, because there is nowhere to install to. Second, the version: if it differs from the one this build was verified against, both versions are shown and the application says so, noting that correct behaviour cannot be guaranteed. That one is a warning rather than a refusal, so pressing \"Continue\" carries on. Either screen lets you point at the installation folder." },
+        { "term": "Checks at start-up", "description": "Two things are checked when the application starts. First, whether Core Keeper can be found: if it cannot, the reason is shown and the application stops, because there is nowhere to install to. Second, the version: if its first three numbers (such as 1.3.0) differ from the versions this application supports, both versions are shown, with a note that correct behaviour cannot be guaranteed. That one is a warning rather than a refusal, so pressing \"Continue\" carries on. Either screen lets you point at the installation folder." },
         { "term": "Agreeing on first use", "description": "The first time you use the application, it tells you that you use it at your own risk, and you can go on only if you agree. Your answer is remembered, so you are not asked again. The same text is always available under \"Disclaimer\" in this help." },
         { "term": "Game folder…", "description": "The Core Keeper installation is found automatically. Steam's own library records are read, so it is found on any drive and in any folder you installed it into. Use this to point at the folder yourself if it is still not found, or to switch between installations. The choice is remembered for next time, and pressing it again offers to go back to automatic detection." },
-        { "term": "Core Keeper was not found", "description": "Either the game is not installed through Steam, or it is somewhere unusual. Start the game once, then reopen this application. If it is still not found, use \"Game folder…\" to point at the installation folder, the one containing CoreKeeper.exe." }
+        { "term": "Core Keeper was not found", "description": "Either the game is not installed through Steam, or it is somewhere unusual. Use \"Game folder…\" to point at the installation folder, the one containing CoreKeeper.exe. If it is not found at start-up, the screen shown then offers \"Choose game folder…\" for the same thing." }
       ]
     },
     {
       "heading": "Left: import settings",
       "paragraphs": [
         "These settings control how a loaded picture is turned into a sheet. Changing anything here rebuilds the sheet. If you have already edited pixels, the rebuild is held back so nothing is lost, and \"Rebuild from settings\" appears at the top.",
-        "These settings do nothing while a preset is on screen and no picture has been opened, or while a finished sheet you saved is open as it is, because there is no source picture to convert. If you open a picture and then switch to a preset, changing them rebuilds from the picture you last opened and replaces the preset on screen. To rebuild from the original picture, choose it again with \"Open image…\". To get the same preset back after it has been replaced, choose a different entry in the list first and then choose it again: choosing the entry the list still shows does not load it. The same applies after \"Open image…\" and \"Random\"."
+        "These settings do nothing while a preset is on screen and no picture has been opened, or while a finished sheet you saved is open as it is, because there is no source picture to convert. If you open a picture and then switch to a preset, changing them rebuilds from the picture you last opened and replaces the preset on screen. To rebuild a finished sheet from its original picture, choose that picture again with \"Open image…\". To get the same preset back after it has been replaced, choose a different entry in the list first and then choose it again: choosing the entry the list still shows does not load it. The same applies after \"Open image…\" and \"Random\"."
       ],
       "terms": [
         { "term": "Make the background transparent", "description": "Clears the area of matching colour connected to the four corners. Use it to cut out a flat background." },
@@ -133,7 +133,7 @@
         { "term": "X / Y", "description": "Nudges the art a pixel at a time. By default it is anchored to the foot line and the horizontal centre. Use this if the character floats or sinks into the ground." },
         { "term": "Alpha cut-off", "description": "Where a semi-transparent pixel is rounded to transparent or opaque. Lower keeps more of the picture; higher sharpens the outline." },
         { "term": "Reduce colours", "description": "Reduces the number of colours, giving the flat blocks of colour typical of pixel art. Effective on photographs and anything with gradients." },
-        { "term": "Scale with nearest neighbour", "description": "Changes how the picture is scaled. Suits art that is already pixel art. For photographs and illustrations it looks jagged, so leave it off." },
+        { "term": "Scale with nearest neighbour", "description": "Changes how the picture is scaled. Suits art that is already pixel art. For photographs and illustrations it looks jagged, so it is usually best left off." },
         { "term": "Add an outline", "description": "Draws a one-pixel outline around the art, keeping the silhouette readable in the game's dark caves. The colour is given in hex, for example #101018. Off by default: pictures from an image generator, and pixel art drawn by hand, usually carry an outline already, and adding a second one doubles it up while shrinking the art itself by two pixels each way to make room. Turn it on for a source that has no outline of its own, such as a photograph." },
         { "term": "Animate the walk and the attack", "description": "Makes a sheet built from one picture actually move: the walk bounces while squashing and stretching, and the attack lunges and dips. On by default. Turn it off and every frame holds the same picture." },
         { "term": "Only move the art, never reshape it", "description": "Keeps the movement but stops the squash and stretch. Reshaping scales the art by a pixel, which can make thin lines or text flicker between frames; use this when it does." },
@@ -156,7 +156,7 @@
         { "term": "Fill (G)", "description": "Replaces the connected area of matching colour. It never spills outside the frame. With \"Apply to all frames\" on, the connected area is worked out separately for each frame. Frames where the clicked spot holds a different colour are left alone, and the status line says how many." },
         { "term": "Colour", "description": "The colour used by the pen and by \"Fill\", in hex, for example #FFFFFF, or #FF8800CC to include transparency. The swatch beside it shows the colour that will actually be painted. If what you type is not a valid colour, nothing is painted and the status line at the bottom tells you so." },
         { "term": "Line (L)", "description": "Press at one end and release at the other to draw a straight line. Where it will land is shown half-transparent until you let go, so it can be placed by eye. Press Escape, or the other mouse button, before letting go to call it off (rectangles too). Useful for outlines and for the line of an eye." },
-        { "term": "Rectangle (U) / Rectangle (filled)", "description": "Draws a rectangle with the point where you pressed and the point where you released as opposite corners, either as an outline or filled in. Useful for square parts such as a belt or an eye." },
+        { "term": "Rectangle (U) / Rectangle (filled)", "description": "Draws a rectangle with the point where you pressed and the point where you released as opposite corners, either as an outline or filled in. Useful for rectangular parts such as a belt or an eye." },
         { "term": "Replace colour (R)", "description": "Replaces every pixel of the clicked colour with the pen colour, whether or not they touch. Unlike \"Fill\", the areas need not be connected, which is what recolouring a shirt needs. With \"Apply to all frames\" on it covers the whole sheet, including what lies outside the 39 frames; with it off, only the frame you clicked in." },
         { "term": "Palette", "description": "Beside the colour box, the colours the sheet uses now, most common first. Click one to make it the pen colour, instead of typing hex to match a shade the picture already has. Only the 24 most used colours are listed, so pick anything else off the art with the picker." },
         { "term": "Draw symmetrically (M)", "description": "Also draws each pixel mirrored about the vertical centre line of the frame. The character faces the viewer and is symmetric, so an eye, a shoulder or a boot need only be drawn once. Turn it off to draw one side alone." },
@@ -165,7 +165,7 @@
         { "term": "Apply to all frames", "description": "Applies each stroke to the same position in all 39 frames at once. Leave it on when working from a single picture. Turn it off to edit only the selected frame." },
         { "term": "View", "description": "Chooses what is being edited: the whole sheet at once, or a single frame magnified for detail work." },
         { "term": "Zoom", "description": "Magnification of the editing area. Increase it for detail work." },
-        { "term": "Grid", "description": "Shows a line between each pixel." },
+        { "term": "Grid", "description": "Shows a line between each pixel, when the zoom is 5 or more." },
         { "term": "Guides", "description": "Marks the frame borders, the recommended standing area, the foot line and the horizontal centre in colour, as an aid to lining art up." },
         { "term": "Light background", "description": "Switches the transparency chequerboard to lighter tones, for checking how the art reads in bright places as well as dark caves." }
       ]
@@ -173,10 +173,10 @@
     {
       "heading": "Sheet layout (the 9x6 grid)",
       "paragraphs": [
-        "The grid in the editor is exactly how the game cuts this sheet into frames. Of the 54 cells - nine across, six down - only 39 are used and the remaining 15 are empty. That is not a choice made here: the game's own artwork is laid out this way, and this sheet matches it.",
+        "The frame borders shown by \"Guides\" are exactly how the game cuts this sheet into frames. Of the 54 cells - nine across, six down - only 39 are used and the remaining 15 are empty. That is not a choice made here: the game's own artwork is laid out this way, and this sheet matches it.",
         "Cells are left over because each row holds one kind of motion. Walking needs six frames per direction, so it fills a whole row for each one, while idling needs a single frame per direction and uses only three cells. The sheet is nine cells wide because rows 5 and 6 are the fullest.",
         "There are only three directions: front, right and back. The game has no left-facing frames; it mirrors the right-facing ones instead.",
-        "Anything drawn in an empty cell never appears in the game. The fill tool does not work there either, and the status line says \"outside any frame\". To see which frame a cell belongs to, put the cursor on it: its number and name appear in the status line."
+        "Anything drawn in an empty cell never appears in the game. The fill tool does not work there either, and pressing it there says so in the status line. To see which frame a cell belongs to, put the cursor on it: its number and name appear in the line just below the editor, which reads \"outside any frame\" over an empty cell."
       ],
       "terms": [
         { "term": "Row 1: idle (3 cells)", "description": "Front, right and back, from the left. Used for standing still, for sleeping, and while riding a boat or a minecart. The six cells from column 4 onwards are unused." },
@@ -192,7 +192,7 @@
       "terms": [
         { "term": "Action", "description": "Chooses the situation - idle, walking, attacking - to see how it will look in game." },
         { "term": "Facing", "description": "\"Front\", \"Right\", \"Back\" and \"Left (mirrored)\". Always check the left-facing view (see the limitations below). The back-facing frames hide the face while \"Hide the face on back-facing frames\" is on at the left; turn it off and the front face appears on the back of the head as well." },
-        { "term": "Play / Pause", "description": "Starts and stops the animation. The button names what pressing it will do, so it reads \"Pause\" while the animation plays. Playback is already running when the application starts. (The one that names the current state instead is the equipment toggle in the status bar.) The slider beside it sets the speed in frames per second. In-game speed varies with the situation, so treat it as a guide." },
+        { "term": "Play / Pause", "description": "Starts and stops the animation. The button names what pressing it will do, so it reads \"Pause\" while the animation plays. Playback is already running when the application starts. (The one that names the current state instead is the \"Armour, clothes and helmet\" button in the status bar.) The slider beside it sets the speed in frames per second. In-game speed varies with the situation, so treat it as a guide." },
         { "term": "\"Every frame holds the same picture\" note", "description": "Appears when every frame of the chosen action is identical. Turning on \"Animate the walk and the attack\" on the left resolves it. \"Idle\", \"Wind-up / aim\", \"Drive / fish\" and \"Sit\" have only one frame in the game, so the note does not appear for them, but they never move either." }
       ]
     },
@@ -204,16 +204,28 @@
         "Until there is, pressing it does not sit silent: the status line says so, and says what to do about it."
       ],
       "terms": [
-        { "term": "Fetch", "description": "Loads that character's in-game appearance into the editor. What arrives is treated as a finished sheet, so the import settings on the left are switched off: there is no original picture behind it to convert again. Hand-made edits are confirmed before they are lost." },
+        { "term": "Fetch", "description": "Loads that character's in-game appearance into the editor. What arrives is treated as a finished sheet, so the import settings on the left are switched off: there is no original picture behind it to convert again. If there are hand-made edits, it asks for confirmation before they are lost." },
         { "term": "Include equipment (helmet and armour)", "description": "With this off, only the character underneath what they are wearing is taken. Equipment is whatever they happened to be wearing rather than part of how they look, and a drawing is usually easier to start without a helmet already over the head, so off is the default. Turn it on to keep whatever they had on. Hair and clothes that the equipment hides are not loaded by the game, though, so they cannot be taken even with this off (some helmets leave a hairstyle made to fit under them). For the bare look, take the helmet and armour off, wait a moment, then press \"Fetch\". Also, some hats and helmets (the party hat, for one) are drawn a little above the head in the game, so in the captured picture they sit slightly lower." }
       ]
     },
     {
       "heading": "Bottom: output",
       "terms": [
+        { "term": "Export for mod.io…", "description": "Writes the current picture as a mod (a zip) that can be registered on mod.io, with the logo and the upload notes for registering it saved beside it. The game folder, the mod and ticked characters are not needed. See the section \"Registering on mod.io to use it from the game\" for more." },
         { "term": "Save as PNG…", "description": "Saves the sheet as a file, for sharing with others or editing in another tool." },
         { "term": "Apply to game", "description": "Writes the sheet as the appearance of each ticked character. Every character gets its own copy, so applying to one leaves the others exactly as they were. If the game is running, the appearance changes within seconds. Disabled while nothing is ticked." },
         { "term": "Remove from game", "description": "Gives the ticked characters their own appearance back by deleting just their pictures. The mod and every other character's picture stay. You see what is affected before anything is deleted. To remove the mod itself, use \"Remove mod\" in the status bar." }
+      ]
+    },
+    {
+      "heading": "Registering on mod.io to use it from the game",
+      "paragraphs": [
+        "A look you made can be written out as a mod that can be registered on mod.io, the site Core Keeper's mods are shared on. Once it is registered, players only need to subscribe to it and enable it from the game's Mods menu. Neither this application nor \"Apply to game\" is needed for that.",
+        "To write one, press \"Export for mod.io…\" at the bottom of the window. Choose the mod's name, its version and how the equipment looks (the armour, clothes and helmet drawn over the picture, or hidden), confirm that you have the right to publish the picture, and then choose where to save. Beside the zip, a logo (1280x720) and upload notes for registering it on mod.io are saved.",
+        "Register it on the mod.io website; this application does not upload anything. The tags to pick and the steps are in the upload notes. Above all, without the Game Version tag players get a warning at start-up and the game does not load the mod unless they choose to load it anyway. When the first three numbers of the game's version (such as 1.3.0) change, add the new version's tag on mod.io too.",
+        "The mod changes only the player's own character, whichever character they play. Other players' screens are not affected. Every export becomes a separate mod, so however many you export, each can be registered as a mod of its own. To register one as a separate mod, add it as a new mod with Add > Mod on the mod.io website. Uploading the file to the page of an existing mod updates that mod instead, and its earlier picture is replaced. Players enable only the mod they want and restart the game. With several mods exported by this application enabled at once, only the first in the load order is applied.",
+        "A character that has a picture from this application's \"Apply to game\" keeps that picture. To see the look of the mod.io mod on that character, take the picture off with \"Remove from game\". While a mod exported by this application is drawing the character, its look is not recorded for \"Fetch\"; \"Fetch\" then takes in the look recorded before that.",
+        "Before registering, check the look in the game with \"Apply to game\" as usual and save it with \"Save as PNG…\", so you can open it again later and export the same picture. Other people's works and characters cannot be used, and adult content is removed on mod.io."
       ]
     },
     {
@@ -233,16 +245,16 @@
     {
       "heading": "Installing",
       "paragraphs": [
-        "1. Extract the ZIP anywhere you like. There is no installer.",
+        "1. Extract the zip somewhere you can write to, such as your desktop or documents folder. There is no installer.",
         "2. Run cks-gui.exe from the extracted folder.",
-        "3. If the bar at the top says the mod is not installed, press \"Install mod\".",
+        "3. If the status bar at the top says the mod is not installed, press \"Install mod\".",
         "Administrator rights are not required, and neither Unity nor .NET has to be installed."
       ]
     },
     {
       "heading": "Uninstalling",
       "paragraphs": [
-        "1. Press \"Remove mod\" in the status bar. The mod, its settings, every character's installed picture and every captured appearance are all removed, restoring the state before installation.",
+        "1. Press \"Remove mod\" in the status bar. The mod, its settings, every character's applied picture and every captured appearance are all removed, restoring the state before installation.",
         "2. Delete the folder you extracted.",
         "That removes everything this application and the mod saved. The game's own files and your saves are never touched. Windows' temporary folder does keep the working copy the game makes when it loads the mod, and the parts this application unpacks when it starts; both are temporary files and safe to delete. If an error occurs while the application's folder cannot be written to, its record (cks-gui-error.log) goes to the temporary folder as well; that is safe to delete too.",
         "If the folder contains portable.txt, the application's settings live in that folder too, so deleting it takes those settings with it."
@@ -251,8 +263,8 @@
     {
       "heading": "Troubleshooting",
       "terms": [
-        { "term": "Nothing changed in game", "description": "Check the bar at the top to confirm the mod is installed. The game needs restarting right after installation, and the character has to be in a world for the change to show. The character shown in the inventory and on the appearance screen is a separate figure the mod does not change, so it keeps the game's own look there." },
-        { "term": "It says Core Keeper was not found", "description": "Check that the game is installed through Steam. If it is and the message persists, start the game once and then reopen this application. If that does not help, use \"Game folder…\" in the status bar to point at the folder containing CoreKeeper.exe." },
+        { "term": "Nothing changed in game", "description": "Check the status bar at the top to confirm the mod is installed. The game needs restarting right after installation, and the character has to be in a world for the change to show. The character shown in the inventory and on the appearance screen is a separate figure the mod does not change, so it keeps the game's own look there." },
+        { "term": "It says Core Keeper was not found", "description": "Check that the game is installed through Steam. If it is and the message persists, use \"Game folder…\" in the status bar (\"Choose game folder…\" on the start-up screen) to point at the folder containing CoreKeeper.exe." },
         { "term": "Pressing play does nothing", "description": "Every frame is probably identical. Turn on \"Animate the walk and the attack\" on the left and set the action to \"Walk\" or \"Attack / mine\". Idle and sitting have one frame in the game and never move." },
         { "term": "The character went transparent or vanished", "description": "The alpha cut-off is probably too high, or background removal took the picture with it. Lower the cut-off or reduce the tolerance and rebuild." },
         { "term": "The art overflows the frame", "description": "The status line reports how many pixels were cut off. Reduce \"Width\" and \"Height\" on the left, or adjust the position with \"Y\"." },
@@ -260,7 +272,7 @@
         { "term": "Equipping armour hides my art", "description": "The button in the status bar reads \"Armour, clothes and helmet: shown\". Press it so that it reads \"Armour, clothes and helmet: hidden\"; it takes effect within seconds." },
         { "term": "Using it alongside other mods", "description": "Other mods that change appearance may conflict. If something misbehaves, try disabling one of them." },
         { "term": "It stopped working after a game update", "description": "Get the newest version of this application and start it. If \"Update mod\" appears in the status bar, press it, and restart the game afterwards if it is running. Every character's applied picture, every captured appearance and the armour display settings stay as they are. If \"Update mod\" does not appear, the mod in the game is already the one this application carries, so putting it in again changes nothing; please wait for an update of this application. Do not use \"Remove mod\" for this: it deletes the pictures as well. \"Remove from game\" at the bottom right only gives the characters their own appearance back; the mod itself stays." },
-        { "term": "I want the original character back", "description": "Press \"Remove from game\", or delete that character's PNG from the skins folder inside the mod settings folder (CustomPlayerSkin\\skins\\<identifier>.png). The identifier is shown by hovering over the character's row under \"Characters to apply to\". The character's own settings were never changed, so the original appearance returns exactly." }
+        { "term": "I want the original character back", "description": "Press \"Remove from game\", or delete that character's PNG from the skins folder inside the mod settings folder (CustomPlayerSkin\\skins\\<identifier>.png). The identifier is shown by hovering over the character's row under \"Characters to apply to\". The character's own settings were never changed, so the original appearance returns exactly. While a mod exported by this application for mod.io is enabled, though, the character shows that mod's picture instead; to get the original appearance back, disable that mod in the game's Mods menu and restart the game." }
       ]
     }
   ]

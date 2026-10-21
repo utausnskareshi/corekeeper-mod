@@ -14,7 +14,10 @@ namespace CoreKeeperSkinTool.Install;
 /// <param name="Section">Section the setting belongs to.</param>
 /// <param name="Description">Description shown to the user by the game.</param>
 /// <param name="Key">Setting name.</param>
-/// <param name="DefaultValue">Value used when the file is absent.</param>
+/// <param name="DefaultValue">
+/// The default the mod registers the setting with, recorded beside the value. A missing file does
+/// not fall back to it: the game reads that setting as default(T) (measured on 1.3.0.2).
+/// </param>
 /// <param name="Value">The value in effect.</param>
 public sealed record ModSetting(
     [property: JsonPropertyName("mod")] string Mod,
@@ -71,8 +74,8 @@ public static class ModConfigWriter
     /// The four settings only make sense together, so all four are written to temporary files
     /// before any of them is swapped in. Writing and swapping them one at a time lets a failure
     /// on the third leave the shirt and trousers hidden while the helmet and armour stay
-    /// visible — and <see cref="IsGearHidden"/> answers from the first file it can read, so the
-    /// screen would go on claiming everything is hidden while the game draws half of it.
+    /// visible — and since <see cref="IsGearHidden"/> calls the gear hidden only when all four
+    /// say so, the screen would report it as showing while the game hides half of it.
     /// </summary>
     /// <param name="hide">True to hide them, which is the default the mod ships with.</param>
     /// <returns>The files written.</returns>
@@ -115,8 +118,8 @@ public static class ModConfigWriter
             {
                 // The read-only attribute is cleared only once the move has objected to it, as
                 // CharacterSkins does for the skins. Left alone, a backup or sync product that
-                // marked one of the four made every attempt stop at it: half switched, "もう一度
-                // 実行すると残りも切り替わる", and no attempt ever getting past it.
+                // marked one of the four made every attempt stop at it: half switched, a message
+                // saying another run would switch the rest, and no attempt ever getting past it.
                 try
                 {
                     File.Move(staging, path, overwrite: true);

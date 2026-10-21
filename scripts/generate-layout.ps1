@@ -29,16 +29,16 @@ $sem = @{}
 function Set-Sem([int]$i, [string]$a, [string]$d, [int]$f) { $script:sem[$i] = @($a, $d, $f) }
 
 Set-Sem 0 'idle' 'down' 0; Set-Sem 1 'idle' 'right' 0; Set-Sem 2 'idle' 'up' 0
-for ($k = 0; $k -lt 6; $k++) { Set-Sem (3 + $k)  'run' 'down'  $k }   # 走行6コマ（正面）
-for ($k = 0; $k -lt 6; $k++) { Set-Sem (9 + $k)  'run' 'right' $k }   # 走行6コマ（横）
-for ($k = 0; $k -lt 6; $k++) { Set-Sem (15 + $k) 'run' 'up'    $k }   # 走行6コマ（背面）
-Set-Sem 21 'swing' 'down' 0;  Set-Sem 22 'swing' 'down' 1             # 攻撃・採掘・設置など
+for ($k = 0; $k -lt 6; $k++) { Set-Sem (3 + $k)  'run' 'down'  $k }   # running, 6 frames (front)
+for ($k = 0; $k -lt 6; $k++) { Set-Sem (9 + $k)  'run' 'right' $k }   # running, 6 frames (side)
+for ($k = 0; $k -lt 6; $k++) { Set-Sem (15 + $k) 'run' 'up'    $k }   # running, 6 frames (back)
+Set-Sem 21 'swing' 'down' 0;  Set-Sem 22 'swing' 'down' 1             # attacking, mining, placing and the like
 Set-Sem 23 'swing' 'right' 0; Set-Sem 24 'swing' 'right' 1
 Set-Sem 25 'swing' 'up' 0;    Set-Sem 26 'swing' 'up' 1
-Set-Sem 27 'aim' 'down' 0;  Set-Sem 28 'aim' 'right' 0;  Set-Sem 29 'aim' 'up' 0   # 溜め・釣り構え
-Set-Sem 30 'hold' 'down' 0; Set-Sem 31 'hold' 'right' 0; Set-Sem 32 'hold' 'up' 0  # 運転・釣り・演奏
-Set-Sem 33 'sit' 'down' 0;  Set-Sem 34 'sit' 'right' 0;  Set-Sem 35 'sit' 'up' 0   # 着席
-Set-Sem 36 'sitArmsInFront' 'down' 0                                               # 着席（腕を前に）
+Set-Sem 27 'aim' 'down' 0;  Set-Sem 28 'aim' 'right' 0;  Set-Sem 29 'aim' 'up' 0   # charging, fishing stance
+Set-Sem 30 'hold' 'down' 0; Set-Sem 31 'hold' 'right' 0; Set-Sem 32 'hold' 'up' 0  # driving, fishing, playing an instrument
+Set-Sem 33 'sit' 'down' 0;  Set-Sem 34 'sit' 'right' 0;  Set-Sem 35 'sit' 'up' 0   # sitting
+Set-Sem 36 'sitArmsInFront' 'down' 0                                               # sitting (arms in front)
 Set-Sem 37 'sitArmsInFront' 'right' 0
 Set-Sem 38 'sitArmsInFront' 'up' 0
 
@@ -52,7 +52,7 @@ foreach ($f in (Get-ChildItem $src -Filter 'Miner_skin_*.asset' | Sort-Object { 
     if (-not $m.Success) { throw "m_Rect を読み取れなかった: $($f.Name)" }
     if (-not $sem.ContainsKey($i)) { throw "コマ番号 $i に対応するアニメーション定義がない（シート構成が変わった可能性）" }
 
-    $uy = [int]$m.Groups[2].Value   # Unity のスプライト座標は左下原点
+    $uy = [int]$m.Groups[2].Value   # Unity's sprite coordinates have their origin at the bottom left
     $h = [int]$m.Groups[4].Value
     $frames.Add([pscustomobject]@{
             index    = $i
@@ -61,7 +61,7 @@ foreach ($f in (Get-ChildItem $src -Filter 'Miner_skin_*.asset' | Sort-Object { 
             frame    = $sem[$i][2]
             x        = [int]$m.Groups[1].Value
             yUnity   = $uy
-            yTopLeft = $TEX_H - $uy - $h   # 画像編集ソフト向けの左上原点 Y
+            yTopLeft = $TEX_H - $uy - $h   # Y from the top-left origin that image editors use
             w        = [int]$m.Groups[3].Value
             h        = $h
         })

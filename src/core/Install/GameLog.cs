@@ -310,7 +310,7 @@ public static class GameLog
         bool compilingThisMod = false;
 
         // Whose code check failed last. Its report comes as a list of lines after the summary,
-        // and those name what was refused but not which assembly refused it.
+        // and those name what was refused but not which assembly it was refused in.
         string? refusedAssembly = null;
 
         // The loader names a type it will not let a mod patch on the line before it says the
@@ -708,8 +708,8 @@ public static class GameLog
     /// Whether two versions name different builds, going only by what both of them spell out.
     ///
     /// They come from two places - the log's header and the game's own files - and were the same
-    /// string on every build measured. Were one of the readers to return less of it one day, the
-    /// numbers without the build say, an exact comparison would take every start for one of
+    /// string on every build measured. Were one of the readers to return less of it one day - the
+    /// numbers without the build, say - an exact comparison would take every start for one of
     /// another build and hide every failure from then on. So only a number that differs, or two
     /// builds both given and different, count; a part only one side gives is no evidence either way.
     /// </summary>

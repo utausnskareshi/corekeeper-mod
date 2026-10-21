@@ -40,14 +40,14 @@ choosing.
 ### 動作環境
 
 - Windows 10 / 11 (64bit)
-- Steam 版 Core Keeper（1.3.0.4-511d で動作を確認済み。対応する版は [`data/supported-versions.json`](data/supported-versions.json) に記載）
+- Steam 版 Core Keeper（1.3.0.6-6e73 で動作を確認済み。対応する版は [`data/supported-versions.json`](data/supported-versions.json) に記載）
 - .NET のインストールは不要（配布物は自己完結ビルド）
 
-このツールの版の番号は、対応する Core Keeper の版に合わせています。現在の版 v1.3.0 は Core Keeper 1.3.0 系用です。
+このツールの版の番号の先頭 2 つは、対応する Core Keeper の版に合わせています（3 つ目の数はツール自身の更新を表します）。現在の版 v1.3.1 は Core Keeper 1.3.0 系用です。
 
 ### 入手と使い方
 
-1. [Releases](../../releases) から zip をダウンロードし、展開して `cks-gui.exe` を実行します
+1. [Releases](../../releases) から zip をダウンロードし、展開して `cks-gui.exe` を実行します。画面上部の帯に「MOD が未導入です」と出ていたら「MOD を導入」を押します
 2. 画像を開く・プリセットを選ぶ・ゲームから取得する、のいずれかでシートを作ります
 3. 必要ならドット単位で描き直します
 4. 右側でキャラクターにチェックを入れ、「ゲームへ配置」を押します
@@ -63,11 +63,12 @@ zip に同梱の `readme.txt` には、アプリを使い始める前に必要�
 - **プリセットから作る** — 6 カテゴリ 30 種。18 種はこのプロジェクトの画像生成ツール
   （[cksgen](https://github.com/utausnskareshi/corekeeper-image-generator)、下記）で作った絵、
   12 種は配色のレシピからツールが描くもので、ゲームの絵は使っていません
-- **ゲーム内の見た目を取り込む** — MOD を導入したキャラクターの現在の見た目を、編集画面へ取り込みます
+- **ゲーム内の見た目を取り込む** — キャラクターの現在の見た目を、編集画面へ取り込みます（MOD の導入が必要です）
 - **ドット単位の編集** — 左右対称に描く、全コマに反映、元に戻す／やり直す、シート内の色から選ぶ
-- **動きの確認** — 待機・歩行・攻撃・溜め・運転・着席、正面・右・左・背面
+- **動きの確認** — 待機・歩行・攻撃・構え・運転・着席、正面・右・左・背面
 - **キャラクターごとの配置と削除** — キャラクターごとに別の画像を持てます
 - **MOD の導入・更新・削除** — アプリから行えます。Unity や .NET の導入は不要です
+- **mod.io 用の書き出し** — 作った見た目を、mod.io に登録できる MOD の zip として書き出します（下記）
 - **日本語 / English** の切り替え
 
 ### 取り込む絵を AI で描くには（別のツール）
@@ -81,6 +82,28 @@ cksgen が書き出す PNG（背景が透明な絵）は、このツールの「
 後ろの絵も描いた場合は、「向き別の絵（任意）」の「右向きの絵…」と「背面の絵…」で開きます（横の絵は右を
 向いている必要があります）。cksgen の動作には NVIDIA の GPU が必要です。詳しくは cksgen の README を
 ご覧ください。
+
+### mod.io に登録して配るには
+
+作った見た目は、[mod.io](https://mod.io/g/corekeeper) に登録できる MOD の zip として書き出せます。登録した
+MOD は、遊ぶ人がゲームの MOD メニューから購読して有効にするだけで使えます（このツールは要りません）。
+
+1. ふだんどおり「ゲームへ配置」でゲーム内の見た目を確かめ、「PNG として保存…」で保存しておきます
+2. 「mod.io 用に書き出す…」を押し、MOD の名前・版・装備の見え方（防具・服・兜を絵の上に重ねるか、
+   非表示にするか）を選んで、保存先を選びます
+3. zip と一緒に、ロゴ画像（1280×720）と登録メモができます。mod.io の Web サイトで登録してください。
+   このツールは登録しません
+
+- 登録メモに、付けるタグと手順を書いています。とくに Game Version のタグ（例: 1.3.0）が無いと、起動時に
+  警告が出て、遊ぶ人がそこで読み込むほうを選ばない限りゲームが読み込みません。Access Type を Asset にすると
+  MOD のスクリプトが動きません
+- 書き出した MOD が掛かるのは、遊ぶ人自身の操作キャラクターだけです。書き出すたびに別の MOD になる
+  ので、いくつ書き出しても、それぞれ別の MOD として登録できます
+- 別の MOD として登録するには、mod.io の「Add」→「Mod」から新しく登録します。すでにある MOD の
+  ページにファイルを上げると、その MOD の更新になり、前の絵は置き換わります。遊ぶ人は使いたい MOD
+  だけを有効にしてゲームを再起動します。このツールで書き出した MOD を 2 つ以上同時に有効にすると、
+  読み込み順で先の 1 つだけが掛かります
+- 「ゲームへ配置」で絵を置いたキャラクターでは、そちらの絵が優先されます
 
 ### 仕組み
 
@@ -119,12 +142,12 @@ GUI をビルドすると、Avalonia がビルド時の匿名の利用統計を 
 
 MOD の同梱データ `build/mod-payload/CustomPlayerSkin.zip` はリポジトリに含みません。これが無い
 ままビルドすると、MOD 導入機能が使えないアプリになります（ビルド時に警告が出ます）。テストは
-同梱データを使う `ModPayloadTests`（8 件）と `ModPayloadLinkTests`（4 件）だけが失敗し、残る 911 件は通ります。作り直すには
+同梱データを使う `ModPayloadTests`（8 件）と `ModPayloadLinkTests`（4 件）だけが失敗し、残る 1043 件は通ります。作り直すには
 Unity 6000.0.59f2 と、Pugstorm が配布している Core Keeper Mod SDK が必要です。SDK 自体もこの
 リポジトリには含まないため、`CoreKeeperModSDK/` に自分で配置してください。
 
 ```powershell
-scripts/setup-dev.ps1           # .NET SDK・Unity・AssetRipper の確認と導入
+scripts/setup-dev.ps1           # .NET SDK・Unity・AssetRipper の確認と導入（Unity は手順の案内のみ）
 scripts/setup-mod-project.ps1   # src/mod を SDK のプロジェクトへ接続
 scripts/build-mod.ps1           # Unity バッチビルド（約 5 分）
 scripts/package-release.ps1     # 配布用 zip の作成
@@ -132,7 +155,7 @@ scripts/package-release.ps1     # 配布用 zip の作成
 
 `build-mod.ps1` はゲームの場所を自動で探します。見つからない場合は `-GamePath` か環境変数
 `CKS_GAME_PATH` で指定してください。なお SDK の仕様上、このスクリプトはビルドした MOD を
-ゲームのフォルダへ直接インストールします。
+ゲームのフォルダへ直接導入します。
 
 ### リポジトリの構成
 
@@ -142,8 +165,9 @@ scripts/package-release.ps1     # 配布用 zip の作成
 | `src/tool` | CLI (`cks`) |
 | `src/gui` | GUI (`cks-gui`、Avalonia) |
 | `src/mod` | ゲーム内 MOD（PugMod。C# ソースで配布） |
+| `src/mod-export` | mod.io 用に書き出す MOD のスクリプト（書き出す zip にそのまま入る C# ソース） |
 | `src/sdk-editor` | Unity のバッチビルドに使うエディタスクリプト |
-| `src/tool.tests`, `src/gui.tests` | テスト（923 件） |
+| `src/tool.tests`, `src/gui.tests` | テスト（1055 件） |
 | `data` | ゲームから実測した座標、プリセットの配色と絵、画像生成用のプロンプト |
 | `scripts` | 開発・ビルド・配布用の PowerShell |
 | `packaging` | 配布物に同梱する readme |
@@ -189,16 +213,16 @@ accepting it.
 ### Requirements
 
 - Windows 10 / 11 (64-bit)
-- Core Keeper on Steam, checked with 1.3.0.4-511d. The versions it supports are listed in
+- Core Keeper on Steam, checked with 1.3.0.6-6e73. The versions it supports are listed in
   [`data/supported-versions.json`](data/supported-versions.json)
 - No .NET installation: the released build is self-contained
 
-The version number of this tool follows the Core Keeper version it is made for: the current
-version, v1.3.0, is for Core Keeper 1.3.0.x.
+The first two numbers of this tool's version follow the Core Keeper version it is made for, and
+the third counts the tool's own updates: the current version, v1.3.1, is for Core Keeper 1.3.0.x.
 
 ### Getting it, and using it
 
-1. Download the zip from [Releases](../../releases), extract it and run `cks-gui.exe`
+1. Download the zip from [Releases](../../releases), extract it and run `cks-gui.exe`. If the status bar at the top says the mod is not installed, press "Install mod"
 2. Build a sheet by opening a picture, picking a preset, or fetching what is already in the game
 3. Redraw pixels by hand if you want to
 4. Tick a character on the right and press "Apply to game"
@@ -211,19 +235,20 @@ Everything about using it is in the application's help.
 
 - **From a picture** - drag and drop, then choose how the background is removed, where the crop
   sits, how it is reduced to pixels, whether it gets an outline, and how it moves when walking
-  or swinging
+  or attacking
 - **From a preset** - 30 characters in 6 categories: 18 are pictures made for this project with
   its companion image generator ([cksgen](https://github.com/utausnskareshi/corekeeper-image-generator),
   see below), and the tool draws the other 12 from colour recipes; none of the game's own artwork
   is involved
-- **From the game** - fetch a character's current appearance into the editor
+- **From the game** - fetch a character's current appearance into the editor (the mod has to be installed)
 - **Pixel editing** - mirrored drawing, apply to every frame, undo and redo, pick from the
   colours already in the sheet
-- **Preview** - idle, walk, swing, aim, drive and sit, facing down, right, left and up
+- **Preview** - idle, walk, attack, aim, drive and sit, facing front, right, left and back
 - **Per character** - apply to and remove from each character separately; each can have its own
   picture
 - **Install, update and remove the mod** from inside the application. Neither Unity nor .NET is
   needed
+- **Export for mod.io** - write the look as a mod zip that can be registered on mod.io (see below)
 - **Japanese and English** interface
 
 ### Drawing the picture with AI (a separate tool)
@@ -238,6 +263,29 @@ When cksgen has also drawn the side and back pictures, open them with "Right-fac
 "Back-facing art…" under "Art per facing (optional)"; the side picture has to face right. cksgen
 needs an NVIDIA GPU; its README has the details.
 
+### Sharing a look on mod.io
+
+A look you made can be written as a mod zip that can be registered on [mod.io](https://mod.io/g/corekeeper).
+Once it is registered, players only need to subscribe to it and enable it from the game's Mods menu;
+this tool is not needed for that.
+
+1. Check the look in the game with "Apply to game" as usual, and save it with "Save as PNG…"
+2. Press "Export for mod.io…", choose the mod's name, its version and how the equipment looks (the
+   armour, clothes and helmet drawn over the picture, or hidden), and choose where to save
+3. A logo (1280x720) and upload notes are saved beside the zip. Register it on the mod.io website;
+   this tool does not upload anything
+
+- The upload notes list the tags to pick and the steps. Above all, without the Game Version tag (such
+  as 1.3.0) players get a warning at start-up and the game does not load the mod unless they choose to
+  load it anyway, and with Access Type set to Asset its scripts do not run
+- The mod changes only the player's own character. Every export becomes a separate mod, so however
+  many you export, each can be registered as a mod of its own
+- To register one as a separate mod, add it as a new mod with "Add" > "Mod" on mod.io. Uploading the
+  file to the page of an existing mod updates that mod instead, and its earlier picture is replaced.
+  Players enable only the mod they want and restart the game. With two or more mods exported by this
+  tool enabled at once, only the first in the load order is applied
+- A character given a picture with "Apply to game" keeps that picture
+
 ### How it works
 
 The game draws the player from a 234x156 pixel sheet of 39 frames. This tool builds a sheet with
@@ -249,7 +297,7 @@ rectangles come from the JSON in [`data/`](data), measured from the game.
 - There are no frames for facing left: the game mirrors the right-facing ones, so lettering and
   anything else asymmetric reads backwards when the character turns left
 - The picture ends up around 16x19 pixels. Fine detail and small text will not survive
-- Only walking (6 frames) and swinging (2 frames) can be animated. Idle, aim, drive and sit hold
+- Only walking (6 frames) and attacking (2 frames) can be animated. Idle, aim, drive and sit hold
   a single frame each in the game, so they stay still
 - Held weapons, tools, shields and fishing rods cannot be changed
 - The replaced look is shown only for your own character on your own screen. In multiplayer, the
@@ -277,12 +325,12 @@ released application sends nothing when it runs). To opt out, set the environmen
 The bundled mod, `build/mod-payload/CustomPlayerSkin.zip`, is not in the repository. Building
 without it produces an application whose install-mod feature cannot work, and the build says so.
 The tests that use that bundle - 8 in `ModPayloadTests` and 4 in `ModPayloadLinkTests` - fail
-without it; the other 911 pass.
+without it; the other 1043 pass.
 Rebuilding it needs Unity 6000.0.59f2 and the Core Keeper Mod SDK that Pugstorm distributes. The
 SDK is not in this repository either: put it in `CoreKeeperModSDK/` yourself.
 
 ```powershell
-scripts/setup-dev.ps1           # check for and install the .NET SDK, Unity and AssetRipper
+scripts/setup-dev.ps1           # check for and install the .NET SDK, Unity and AssetRipper (Unity: instructions only)
 scripts/setup-mod-project.ps1   # attach src/mod to the SDK project
 scripts/build-mod.ps1           # Unity batch build, about 5 minutes
 scripts/package-release.ps1     # build the release zip
@@ -300,8 +348,9 @@ installs it there.
 | `src/tool` | The CLI (`cks`) |
 | `src/gui` | The GUI (`cks-gui`, Avalonia) |
 | `src/mod` | The in-game mod (PugMod, shipped as C# source) |
+| `src/mod-export` | The scripts of the mod written for mod.io (C# source copied into every exported zip) |
 | `src/sdk-editor` | Editor script used by the Unity batch build |
-| `src/tool.tests`, `src/gui.tests` | Tests (923 of them) |
+| `src/tool.tests`, `src/gui.tests` | Tests (1055 of them) |
 | `data` | Measurements taken from the game, the preset colour recipes and pictures, and the image-generator prompt |
 | `scripts` | PowerShell for development, building and packaging |
 | `packaging` | The readme that ships inside the zip |

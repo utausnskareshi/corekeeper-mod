@@ -179,11 +179,12 @@ public sealed class TranslationCoverageTests
         // these calls sit on status-update paths, several of them inside catch blocks. A message
         // that is one placeholder short there replaces a handled error with a crash.
         //
-        // EveryLanguage is covered as well, and matters more than Format does. It is used only
-        // by the start-up gate, which runs before any window exists and outside any try, so a
-        // FormatException there is not a bad status line but an application that will not open,
-        // with nothing on screen to recover from. Its no-argument overload is checked too: that
-        // one does not format at all, so a template with a placeholder shows "{0}" to the user.
+        // EveryLanguage is covered as well. It writes the start-up gate's notices and the lines the
+        // notice window adds, which are read before the main window exists and the language can be
+        // chosen. A template one value short does not throw there - SafeFormat hands back the
+        // unfilled template - so every reader is shown "{0}" where a path or a version belonged.
+        // Its no-argument overload is checked too: that one does not format at all, so a template
+        // with a placeholder shows "{0}" to the user.
         string root = FindRepositoryRoot();
         Dictionary<string, string> ja = LoadLanguage(root, "ja");
         Dictionary<string, string> en = LoadLanguage(root, "en");
@@ -470,7 +471,7 @@ public sealed class TranslationCoverageTests
         string[] namespaces =
         [
             "action", "anim", "app", "background", "character", "confirm", "dialog", "dir",
-            "editor", "env", "error", "gear", "help", "import", "motion", "outline", "pixelart",
+            "editor", "env", "error", "gear", "help", "import", "modio", "motion", "outline", "pixelart",
             "preset", "presetGroup", "preview", "section", "size", "startup", "status", "tool",
             "top", "uninstall", "views",
         ];

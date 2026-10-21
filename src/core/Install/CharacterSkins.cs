@@ -13,8 +13,8 @@ namespace CoreKeeperSkinTool.Install;
 /// Why this one character could not be dealt with, or null when nothing went wrong.
 ///
 /// Carried in the result rather than thrown, because a removal covering several characters gets
-/// part way through: throwing at the first unreadable file threw away the record of everything
-/// already deleted, and the caller could neither report it nor undo it.
+/// part way through: throwing at the first file that could not be deleted threw away the record
+/// of everything already deleted, and the caller could neither report it nor undo it.
 /// </param>
 public sealed record CharacterSkinResult(string Guid, string Path, bool Changed, string? Error = null);
 
@@ -251,8 +251,8 @@ public static class CharacterSkins
                 try
                 {
                     // Through PathSafety, which clears the read-only attribute first. A plain
-                    // Delete leaves a read-only staging file behind for good, and that file then
-                    // blocks every future install for the character it belongs to.
+                    // Delete refuses a read-only staging file and leaves a full-sized copy behind
+                    // until a later install clears it.
                     PathSafety.DeleteFile(leftover);
                 }
                 catch (Exception)

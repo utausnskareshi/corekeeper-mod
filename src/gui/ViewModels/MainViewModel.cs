@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CoreKeeperSkinTool.Editing;
+using CoreKeeperSkinTool.Export;
 using CoreKeeperSkinTool.Gui.Editing;
 using CoreKeeperSkinTool.Gui.Localization;
 using CoreKeeperSkinTool.Imaging;
@@ -15,17 +16,17 @@ using SkiaSharp;
 namespace CoreKeeperSkinTool.Gui.ViewModels;
 
 /// <summary>An animation that can be played in the preview.</summary>
-/// <param name="Key">Name as used by the layout definition, such as idle or run.</param>
-/// <param name="Label">Name shown on screen.</param>
+/// <param name="key">Name as used by the layout definition, such as idle or run.</param>
+/// <param name="labelKey">Language key of the name shown on screen.</param>
 public sealed class AnimationChoice(string key, string labelKey) : LocalizedChoice(labelKey)
 {
     public string Key { get; } = key;
 }
 
 /// <summary>A facing for the preview. Left is drawn by mirroring the right-facing frames.</summary>
-/// <param name="Key">Direction name as used by the layout definition.</param>
-/// <param name="Label">Name shown on screen.</param>
-/// <param name="Mirrored">Whether to draw the frame mirrored.</param>
+/// <param name="key">Direction name as used by the layout definition.</param>
+/// <param name="labelKey">Language key of the name shown on screen.</param>
+/// <param name="mirrored">Whether to draw the frame mirrored.</param>
 public sealed class DirectionChoice(string key, string labelKey, bool mirrored) : LocalizedChoice(labelKey)
 {
     public string Key { get; } = key;
@@ -130,8 +131,11 @@ public sealed partial class MainViewModel : ObservableObject
     private int _buildVersion;
 
     /// <summary>
-    /// Incremented for every file opened. Decoding runs on a worker thread, so the load that
-    /// finishes last is not necessarily the one asked for last, and only the newest may publish.
+    /// Incremented whenever a picture or a sheet is opened or an appearance is taken from the
+    /// game, and by <see cref="SupersedePendingBuild"/> so that choosing a preset calls such a
+    /// load off; the side and back pictures keep their own numbers. Decoding runs on a worker
+    /// thread, so the load that finishes last is not necessarily the one asked for last, and
+    /// only the newest may publish.
     /// </summary>
     private int _loadVersion;
 
@@ -436,15 +440,18 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    /// <summary>The sheet being edited; null before an image is imported.</summary>
+    /// <summary>
+    /// The sheet being edited. The part guide is loaded into it at start-up, so this is null
+    /// only when that could not be built and nothing has been opened or chosen since.
+    /// </summary>
     public EditorDocument? Document { get; private set; }
 
     /// <summary>Entry point for switching language; the list at the top right binds to it directly.</summary>
     public Loc Localization => Loc.Instance;
 
     /// <summary>
-    /// The window's title, carrying the tool's version. The version follows the game's - 1.3.0 for
-    /// Core Keeper 1.3.0.x - and nothing else in the window said which one was running.
+    /// The window's title, carrying the tool's version. Its first two numbers follow the game's - 1.3
+    /// for Core Keeper 1.3 - and nothing else in the window said which one was running.
     /// </summary>
     public string WindowTitle => $"{Loc.Instance["app.title"]} v{ProductVersion}";
 
@@ -787,10 +794,11 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>
     /// Whether to fill in the head on the thirteen frames that show the character from behind.
     ///
-    /// One picture goes into all thirty-nine frames, so without this the face drawn for the
-    /// front turns up on the back of the head as well, eyes and all. Measured from the game's
-    /// own character, its back-facing frames carry no eyes at all and its hair reaches further
-    /// down to cover where the face would be. On by default for that reason.
+    /// Unless a picture is supplied for the back, the front picture goes into these frames too,
+    /// so without this the face drawn for the front turns up on the back of the head as well,
+    /// eyes and all. Measured from the game's own character, its back-facing frames carry no eyes
+    /// at all and its hair reaches further down to cover where the face would be. On by default
+    /// for that reason.
     /// </summary>
     [ObservableProperty]
     private bool _hideFaceOnBackFrames = true;
@@ -1094,13 +1102,6 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Opens a finished sheet for editing, without converting it.
-    ///
-    /// The import settings play no part from here on: there is no source picture to apply them
-    /// to. The previous one is released and the offer to rebuild goes with it, so the settings
-    /// cannot silently replace a sheet they had nothing to do with.
-    /// </summary>
-    /// <summary>
     /// Asked when a file is the sheet's size but does not look like one, to choose between
     /// opening it unchanged and converting it. True opens it as a sheet, false converts it, and
     /// null means the question was dismissed without answering - Escape, or the close button -
@@ -1164,8 +1165,10 @@ public sealed partial class MainViewModel : ObservableObject
         // button still replace each other and neither facing disturbs the other.
         int facingLoad = side ? ++_sideVersion : ++_backVersion;
 
-        // Left behind either by a newer load of this facing, or by whatever replaces the front
-        // picture - opening a sheet and choosing a preset both free these bitmaps.
+        // Left behind either by a newer load of this facing, or by anything that raises the load
+        // number: opening a picture, opening a sheet or taking an appearance from the game, or
+        // choosing a preset or the random character. Only opening a sheet, which taking an
+        // appearance from the game also does, frees these bitmaps; the others leave them in place.
         bool Superseded() =>
             load != _loadVersion || facingLoad != (side ? _sideVersion : _backVersion);
 
@@ -1302,6 +1305,13 @@ public sealed partial class MainViewModel : ObservableObject
         return await ask();
     }
 
+    /// <summary>
+    /// Opens a finished sheet for editing, without converting it.
+    ///
+    /// The import settings play no part from here on: there is no source picture to apply them
+    /// to. The previous one is released and the offer to rebuild goes with it, so the settings
+    /// cannot silently replace a sheet they had nothing to do with.
+    /// </summary>
     private async Task LoadAsSheetAsync(
         SKBitmap sheet, string path, bool complete, int load,
         (EditorDocument? Document, bool Edited) baseline, long revisionAtStart)
@@ -1512,7 +1522,7 @@ public sealed partial class MainViewModel : ObservableObject
                 // "a conversion really was queued" for it - which is the one thing
                 // SupersedePendingBuild uses to decide that a settings change is outstanding.
                 // Choosing a preset after any settings change had been honoured therefore put
-                // "apply the settings and rebuild" back on screen, and pressing it replaced the
+                // "rebuild from settings" back on screen, and pressing it replaced the
                 // preset and everything drawn over it with a conversion of the old picture,
                 // undo stack included. The guard below was written for exactly that and could
                 // not hold while this stayed set.
@@ -1616,19 +1626,13 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _sourceWasTruncated;
 
-    /// <summary>Whether a rebuild is pending.</summary>
+    /// <summary>
+    /// Whether an import setting change is waiting for "rebuild from settings", having been held
+    /// back because applying it would discard edits.
+    /// </summary>
     public bool NeedsRegenerate =>
         _settingsChangedSinceBuild && WouldDiscardEdits && _sourceImage is not null;
 
-    /// <summary>
-    /// Runs one conversion.
-    ///
-    /// Two things have to hold even when the user keeps changing settings while a conversion runs.
-    /// Only one conversion may touch <c>_sourceImage</c> at a time, which the gate enforces, and
-    /// only the newest request may publish its result, which the version number enforces.
-    /// Without the latter, a slow conversion finishing after a faster newer one would replace the
-    /// document with output the current settings no longer describe.
-    /// </summary>
     /// <summary>
     /// Drops any conversion that is queued or already running, because the caller is about to
     /// decide what the document holds.
@@ -1658,7 +1662,7 @@ public sealed partial class MainViewModel : ObservableObject
         // Only when a conversion really was queued. A queued conversion means a settings change
         // is still waiting to be honoured, and the offer to rebuild should come back - but this
         // runs for a preset and for the random character too, and there nothing was outstanding.
-        // Raising the flag regardless put "apply the settings and rebuild" on screen after the
+        // Raising the flag regardless put "rebuild from settings" on screen after the
         // user had merely picked a character and drawn on it, and pressing it - which is what
         // the button asks for - replaced both with a conversion of a picture they had moved on
         // from, with nothing to undo.
@@ -1697,6 +1701,15 @@ public sealed partial class MainViewModel : ObservableObject
         return true;
     }
 
+    /// <summary>
+    /// Runs one conversion.
+    ///
+    /// Two things have to hold even when the user keeps changing settings while a conversion runs.
+    /// Only one conversion may touch <c>_sourceImage</c> at a time, which the gate enforces, and
+    /// only the newest request may publish its result, which the version number enforces.
+    /// Without the latter, a slow conversion finishing after a faster newer one would replace the
+    /// document with output the current settings no longer describe.
+    /// </summary>
     /// <param name="discardEdits">
     /// Whether the caller has the user's consent to throw away hand-drawn pixels. Only the two
     /// paths the user asks for directly - opening an image and pressing "rebuild from settings" -
@@ -1966,7 +1979,6 @@ public sealed partial class MainViewModel : ObservableObject
 
     // ------------------------------------------------------------ Editing actions
 
-    /// <summary>Handles a press or drag on the editing surface.</summary>
     /// <summary>
     /// Closes the current stroke so the next change starts its own undo step.
     ///
@@ -2178,6 +2190,7 @@ public sealed partial class MainViewModel : ObservableObject
     public void HandlePixel(int x, int y, bool isStart) =>
         HandlePixel(x, y, isStart, erase: false, interpolated: false);
 
+    /// <summary>Handles a press or drag on the editing surface.</summary>
     /// <param name="erase">
     /// Erase rather than paint, whatever tool is selected. Set by the right button.
     /// </param>
@@ -2638,8 +2651,9 @@ public sealed partial class MainViewModel : ObservableObject
     // ------------------------------------------------------------ Output
 
     /// <summary>
-    /// Whether two paths name the same file, compared the way the command line compares its input
-    /// and output (EnsureDifferentFiles): fully resolved, links followed, case ignored.
+    /// Whether two paths name the same file, compared as the command line first compares its input
+    /// and output (EnsureDifferentFiles): fully resolved, links followed, case ignored. Its further
+    /// guess at a hard link (LooksLikeSameFile) is not made here, so a hard link is not caught.
     ///
     /// A path that cannot be resolved counts as different. The write that follows fails on it
     /// with its own message, which says more than a refusal made up here could.
@@ -2852,6 +2866,196 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
+    // ------------------------------------------------------------ mod.io export
+
+    /// <summary>This tool's version as major.minor.patch, recorded in the mod it exports.</summary>
+    private static string ToolVersion =>
+        typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "?";
+
+    /// <summary>
+    /// The export screen's starting point: a name for the picture, the look the gear toggle shows in
+    /// the game now - the one that has been tried there - and what is known about the game's version.
+    /// </summary>
+    public ModIoExportDialogModel CreateModIoExportDialog()
+    {
+        GameVersionCheck game;
+        try
+        {
+            game = GameVersion.Check(_gamePath);
+        }
+        catch (Exception)
+        {
+            // Advice only; the export does not depend on it
+            game = new GameVersionCheck(GameVersionState.Unknown, null, []);
+        }
+
+        return new ModIoExportDialogModel(DefaultModIoName(), ShowGameGear, game);
+    }
+
+    /// <summary>
+    /// The name offered on the export screen: the character the look was fetched from, the file the
+    /// picture was opened from, or the preset. Only a suggestion; it is typed over on the screen.
+    /// </summary>
+    private string DefaultModIoName()
+    {
+        if (_fetchedFrom is { } character)
+        {
+            return character.Display;
+        }
+
+        if (SourcePath is { Length: > 0 } path)
+        {
+            return Path.GetFileNameWithoutExtension(path);
+        }
+
+        return SelectedPreset?.Display ?? Loc.Instance["modio.defaultName"];
+    }
+
+    /// <summary>
+    /// What "Export for mod.io" does first: waits for whatever conversion or load is on its way
+    /// before the screen opens, so the name the screen offers and the picture written are those of
+    /// the picture the button was pressed for. False, with the reason left on the status line, when
+    /// that picture did not arrive.
+    ///
+    /// Waited for only after the screen and the save dialog, a picture still loading at the press was
+    /// offered the name of the one before it, and a load that failed while the screen was open went
+    /// unnoticed: the previous picture was exported over the message saying why (the code review of
+    /// 2026-10-08).
+    /// </summary>
+    public async Task<bool> SettleBeforeModIoExportAsync()
+    {
+        int mark = _picturesNotArrived;
+
+        // What the line said before the wait, put back below when the wait's own line is all that is
+        // left: a conversion superseded by a preset ends without a word, and an export screen then
+        // cancelled says nothing either, so "waiting for the conversion" stayed with nothing waiting
+        // (the adversarial verification of 2026-10-09). The other callers of the wait always write a
+        // line of their own afterwards.
+        Func<string>? before = _statusRecipe;
+        string said = Status;
+
+        await WaitUntilSettledAsync();
+
+        // The screen does not open when what it waited for did not come, as "Save" does not write
+        if (NotArrivedSince(mark) is { } why)
+        {
+            SetStatus(() => why() + Loc.Instance["status.notExportedAfterWait"]);
+            return false;
+        }
+
+        if (Status != said && Status == Loc.Instance["status.waitingForConversion"])
+        {
+            SetStatus(before ?? (() => said));
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Whether an export to <paramref name="zipPath"/> is refused for writing over a picture being
+    /// converted, said on the status line as <see cref="ExportForModIo"/> says it. Asked before the
+    /// question about replacing the files beside the zip, which listed that picture as about to be
+    /// replaced and lost, the export being refused only once the user had agreed (the adversarial
+    /// verification of 2026-10-09). <see cref="ExportForModIo"/> keeps its own check.
+    /// </summary>
+    public bool RefuseModIoTarget(string zipPath)
+    {
+        (string logoPath, string guidePath) = ModIoExporter.CompanionPaths(zipPath);
+        foreach (string target in new[] { zipPath, logoPath, guidePath })
+        {
+            if (HeldSourcePaths().Any(source => PointsAtSameFile(source, target)))
+            {
+                SetStatus("status.modioOverSource", target);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// "Export for mod.io" as the button does it: after whatever conversion or load is on its way,
+    /// as saving and applying are, so what is written is what is on screen.
+    /// </summary>
+    public async Task ExportForModIoWhenSettledAsync(string zipPath, ModIoExportOptions options)
+    {
+        int mark = _picturesNotArrived;
+        await WaitUntilSettledAsync();
+
+        // Not written when what it waited for did not come, as "Save" is not
+        if (NotArrivedSince(mark) is { } why)
+        {
+            SetStatus(() => why() + Loc.Instance["status.notExportedAfterWait"]);
+            return;
+        }
+
+        ExportForModIo(zipPath, options);
+    }
+
+    /// <summary>
+    /// Writes the current sheet as a mod to upload to mod.io, with the logo and the registration
+    /// memo beside it. Nothing here touches the game: the mod is for whoever installs it from mod.io.
+    /// </summary>
+    public void ExportForModIo(string zipPath, ModIoExportOptions options)
+    {
+        if (Document is not { } document)
+        {
+            SetStatus("status.noImage");
+            return;
+        }
+
+        // Never over a picture the sheet is being made from, as Save refuses: the logo is a PNG
+        // named after the zip, and a picture of that name being converted would be lost
+        (string logoPath, string guidePath) = ModIoExporter.CompanionPaths(zipPath);
+        foreach (string target in new[] { zipPath, logoPath, guidePath })
+        {
+            if (HeldSourcePaths().Any(source => PointsAtSameFile(source, target)))
+            {
+                SetStatus("status.modioOverSource", target);
+                return;
+            }
+        }
+
+        try
+        {
+            using SKBitmap sheet = document.ToBitmap();
+
+            ModIoExportResult result = ModIoExporter.Export(
+                zipPath, sheet, _layout,
+                new ModIoExportRequest(
+                    options,
+                    ModIoExporter.GameVersionTag(GameVersion.Read(_gamePath)),
+                    ToolVersion,
+                    Loc.Instance.Current.Code));
+
+            SetStatus("status.modioExported", result.ZipPath, result.LogoPath, result.GuidePath);
+        }
+        catch (ToolException ex)
+        {
+            SetStatus(ex);
+        }
+        catch (ModIoWriteException ex)
+        {
+            // Which of the three files, in the window's language: the runtime's sentence is English
+            // and says nothing about what to do. A file another program holds and a folder that
+            // refuses writing fail the same way, so both ways out are given
+            if (ex.Replaced.Count == 0)
+            {
+                SetStatus("status.modioWriteFailed", ex.FilePath);
+            }
+            else
+            {
+                // Stopped after some files were already replaced: those are new, the rest old, so
+                // the zip no longer matches the logo and memo beside it until it is exported again
+                SetStatus("status.modioWritePartial", ex.FilePath, string.Join("\n", ex.Replaced));
+            }
+        }
+        catch (Exception ex)
+        {
+            SetStatus("status.modioFailed", ex);
+        }
+    }
+
     /// <summary>
     /// Writes the current sheet as the appearance of every ticked character.
     ///
@@ -2941,7 +3145,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// Removes the replaced appearance from every ticked character, leaving the mod installed.
     ///
     /// Only those characters' images are deleted, so the others keep theirs. Removing the mod
-    /// itself is a separate action, on the button in the top bar.
+    /// itself is a separate action, on the button in the environment bar.
     /// </summary>
     /// <param name="confirmed">
     /// The characters the user was actually shown and agreed to. Read afresh here, the selection
@@ -3027,7 +3231,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// Called after an install or a removal, including a failed one. Both write file by file, so
     /// a failure partway through leaves some characters changed and some not, and a row that
     /// disagrees with disk cannot be corrected from the window: the refresh on activation
-    /// fingerprints the save folder only and never notices the skins folder at all.
+    /// fingerprints only the save folders and the mods folder's path, never the skins folder.
     /// </summary>
     private void SyncInstalledState(ModConfigLocation location)
     {
@@ -3375,15 +3579,18 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _canInstallMod;
 
-    /// <summary>Whether the game was found. Install actions stay hidden when it was not.</summary>
+    /// <summary>
+    /// Whether the game was found. The view does not bind to it: when it was not,
+    /// <see cref="CanInstallMod"/> is false as well, and that is what disables the mod buttons.
+    /// </summary>
     [ObservableProperty]
     private bool _isGameFound;
 
     /// <summary>
     /// Whether the mod is currently in the game.
     ///
-    /// The one button in the top bar both installs and removes, so this decides which of the two
-    /// pressing it does.
+    /// The one mod button in the environment bar both installs and removes, so this decides
+    /// which of the two pressing it does.
     /// </summary>
     [ObservableProperty]
     private bool _isModInstalled;
@@ -3446,7 +3653,7 @@ public sealed partial class MainViewModel : ObservableObject
 
             // IsModOutdated is lowered with IsModInstalled on every way out, as the catch below
             // does. These two returned without it, so a game folder that went missing left
-            // "MOD を更新" on screen under ゲームが見つかりません.
+            // "Update mod" (action.updateMod) on screen under env.gameNotFound.
             if (_gamePath is null)
             {
                 EnvironmentStatus = Loc.Instance["env.gameNotFound"];
@@ -3675,7 +3882,7 @@ public sealed partial class MainViewModel : ObservableObject
         }
     }
 
-    // ------------------------------------------------------------ Removal
+    // ------------------------------------------------------------ Fetching and removal
 
     /// <summary>
     /// Puts a character's appearance from inside the game onto the canvas.
@@ -3733,7 +3940,7 @@ public sealed partial class MainViewModel : ObservableObject
                 // game's. "Load the character in the game" is then advice that can never work,
                 // however many times it is followed - taking the picture off again is what makes
                 // a capture possible. Read from the folder rather than from the row's own mark,
-                // which is only brought up to date after an install or a removal.
+                // which is set when the list is built and then only after an install or a removal.
                 bool replaced = CharacterSkins
                     .InstalledGuids(location.ModsDirectory, SheetInstaller.DefaultModFolderName)
                     .Contains(choice.Character.Guid);
@@ -3944,9 +4151,10 @@ public sealed partial class MainViewModel : ObservableObject
     private static SKColor? ParseColor(string text) => TryParseColor(text);
 }
 
-/// <summary>A frame that can be selected for editing.</summary>
-/// <param name="Frame">The target frame; null means the whole sheet.</param>
-/// <param name="Label">Name shown on screen.</param>
+/// <summary>
+/// A frame that can be selected for editing, or the whole sheet when
+/// <see cref="FrameChoice.Frame"/> is null.
+/// </summary>
 public sealed class FrameChoice : LocalizedChoice
 {
     private readonly string? _literal;

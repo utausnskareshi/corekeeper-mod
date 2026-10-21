@@ -11,7 +11,8 @@ namespace CoreKeeperSkinTool.Tests;
 ///
 /// The real game folder is never touched, and no game artwork is used. The captured files are
 /// written here by hand in the shape the mod writes them: one band per layer, stacked downwards
-/// in the order the game draws them, with a manifest saying which order that was.
+/// in the file's own order (not the order the game draws them), with a manifest saying which
+/// order that was.
 ///
 /// Nearly all of them run against a six-by-four sheet rather than the real 234x156 one. Composing
 /// reads nothing from the layout but the texture size, so the small one exercises the same code,
@@ -101,8 +102,9 @@ public sealed class CapturedSkinTests : IDisposable
     [Fact]
     public void 帯の枚数と描画順が固定されている()
     {
-        // The mod writes the bands in this order and the tool stacks them in it. Changing either
-        // side alone silently produces a sheet of the right size with the wrong layer on top.
+        // The mod writes the bands in this order and the tool finds each band by it before stacking
+        // them in DrawOrder. Changing either side alone silently produces a sheet of the right size
+        // with the wrong layer on top.
         Assert.Equal(9, CapturedSkins.Layers.Length);
         Assert.Equal("body", CapturedSkins.Layers[0]);
         Assert.Equal(new[] { "helm", "breastArmor", "pantsArmor" }, CapturedSkins.Layers[^3..]);
@@ -286,7 +288,8 @@ public sealed class CapturedSkinTests : IDisposable
     {
         WriteManifest();
 
-        // Six bands instead of nine, which is what a mod flattening the appearance would write
+        // Six bands instead of nine, which is what a mod leaving out the three equipment bands
+        // would write
         string path = Path.Combine(CapturedDirectory, Guid1 + CapturedSkins.Extension);
         using (SKBitmap wrong = PixelOps.CreateEmpty(Layout.Texture!.Width, Layout.Texture.Height * 6))
         {
@@ -379,8 +382,10 @@ public sealed class CapturedSkinTests : IDisposable
     [Fact]
     public void 書式ファイルの鍵は大文字小文字を問わない()
     {
-        // The mod writes camelCase, which is what a JSON file should look like. A reader that
-        // matched names exactly would leave the version at zero and report a mismatch that is not.
+        // The mod writes camelCase, which is what a JSON file should look like, and WriteManifest
+        // writes it that way for every other test; this one writes the keys as the record names
+        // them. A reader that matched only one of the two spellings would leave the version at zero
+        // and report a mismatch that is not.
         File.WriteAllText(
             Path.Combine(CapturedDirectory, CapturedSkins.ManifestFileName),
             $"{{ \"Format\": {CapturedSkins.SupportedFormat}, \"Layers\": [" +
@@ -445,8 +450,8 @@ public sealed class CapturedSkinTests : IDisposable
     [Fact]
     public void 大文字の識別子でも同じパスになる()
     {
-        // The mod files a capture under the identifier as the game writes it; the save file and
-        // this tool must agree on the name whichever case each of them happens to use.
+        // The mod files a capture under the identifier in lower case (CharacterIdentity.Normalize);
+        // this tool must arrive at the same name whichever case the identifier reaches it in.
         string lower = CapturedSkins.PathFor(ModsDirectory, ModFolder, Guid1);
         string upper = CapturedSkins.PathFor(ModsDirectory, ModFolder, Guid1.ToUpperInvariant());
 
@@ -480,6 +485,14 @@ public sealed class CapturedSkinTests : IDisposable
 
     private static string ReadModSource(string fileName) =>
         File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "mod", fileName));
+
+    /// <summary>
+    /// Every C# file the game compiles as a mod: the tool's own mod, and the scripts copied into
+    /// every mod.io export (src/mod-export). Both go through the same code check in the game.
+    /// </summary>
+    private static IEnumerable<string> ModSourceFiles() =>
+        new[] { "mod", "mod-export" }.SelectMany(folder => Directory.EnumerateFiles(
+            Path.Combine(FindRepositoryRoot(), "src", folder), "*.cs", SearchOption.AllDirectories));
 
     [Fact]
     public void 帯の並びがMOD側と一致する()
@@ -516,9 +529,10 @@ public sealed class CapturedSkinTests : IDisposable
         // The two sides treat these bands differently, and the difference has to agree on which
         // bands they are. The mod counts equipment as present only while the game is drawing it,
         // because a switched-off armour layer still holds the prefab's default armour; a base
-        // layer counts as soon as its art has loaded, so that a picture without equipment still
-        // has the shirt that the armour was covering. Drift either way is silent: a base layer
-        // would vanish whenever something covered it, or armour nobody was wearing would appear.
+        // layer counts as soon as its art has loaded, on screen or not, which keeps a layer whose
+        // renderer is off for some other reason. (What armour covers cannot be kept that way: the
+        // game clears it.) Drift either way is silent: a base layer would vanish whenever its
+        // renderer was off, or armour nobody was wearing would appear.
         string source = ReadModSource("SkinCapture.cs");
 
         Match declaration = Regex.Match(
@@ -647,10 +661,7 @@ public sealed class CapturedSkinTests : IDisposable
 
         List<string> offences = [];
 
-        foreach (string file in Directory.EnumerateFiles(
-            Path.Combine(FindRepositoryRoot(), "src", "mod"),
-            "*.cs",
-            SearchOption.AllDirectories))
+        foreach (string file in ModSourceFiles())
         {
             int number = 0;
 
@@ -730,10 +741,7 @@ public sealed class CapturedSkinTests : IDisposable
 
         List<string> offences = [];
 
-        foreach (string file in Directory.EnumerateFiles(
-            Path.Combine(FindRepositoryRoot(), "src", "mod"),
-            "*.cs",
-            SearchOption.AllDirectories))
+        foreach (string file in ModSourceFiles())
         {
             int number = 0;
 

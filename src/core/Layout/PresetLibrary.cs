@@ -62,8 +62,9 @@ public sealed class PresetDefinition
 
     /// <summary>
     /// Whether the recipe asks for one of the optional parts.
-    /// A recipe with no "features" at all arrives with this null rather than empty, so the
-    /// absence is treated as "none of them" instead of throwing.
+    /// A recipe that says "features": null arrives with this null rather than empty (one that
+    /// leaves the key out keeps the empty default), so null is treated as "none of them"
+    /// instead of throwing.
     /// </summary>
     public bool Has(string feature) =>
         Features is not null && Features.Contains(feature, StringComparer.Ordinal);
@@ -124,7 +125,8 @@ public sealed class PresetLibrary
     /// <summary>Rejects a definition that would produce duplicate or unnamed entries.</summary>
     public void Validate()
     {
-        // A property the file leaves out arrives as null even though it is not declared nullable,
+        // A property the file sets to null arrives as null even though it is not declared nullable
+        // (one it leaves out keeps its empty initializer and is caught by the checks below),
         // and the first use of it was a bare NullReferenceException with nothing in it naming the
         // file. The same reason the layout checks its own properties one by one.
         if (Presets is null)

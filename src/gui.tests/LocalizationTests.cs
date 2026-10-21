@@ -11,8 +11,9 @@ namespace CoreKeeperSkinTool.Gui.Tests;
 /// <summary>
 /// Language resource tests.
 ///
-/// A missing translation only puts the key on screen rather than failing,
-/// which is hard to notice by running the app, so they are compared mechanically here.
+/// A missing translation does not fail: the Japanese text, or the key itself when no language
+/// has it, is shown instead, which is hard to notice by running the app, so they are compared
+/// mechanically here.
 /// </summary>
 public sealed class LocalizationTests
 {
@@ -182,11 +183,11 @@ public sealed class LocalizationTests
     [Fact]
     public void 向きが空になったエラーは両言語で数字が正しい位置に入る()
     {
-        // These keys are the ones the scan cannot see. Every other keyed error hands its key over
-        // as a literal, so TranslationCoverageTests can read the call and count what it supplies;
-        // these are chosen from a table and passed in a variable, which that scan skips (its own
-        // comment says so of the two facingVanished keys). Nothing else would notice if the
-        // arguments went in the wrong order and the window showed the placement size as an offset.
+        // These keys are ones the scan cannot see. TranslationCoverageTests counts what each call
+        // supplies only where the key is handed over as a literal; these are chosen from a table
+        // and passed in a variable, which that scan skips, as it skips the keys PrepareSide is
+        // handed. Nothing else would notice if the arguments went in the wrong order and the
+        // window showed the placement size as an offset.
         //
         // Driven through the pipeline rather than by building the exception here, so that what is
         // pinned is the order Build actually passes, not a copy of it written alongside.
@@ -208,8 +209,8 @@ public sealed class LocalizationTests
         Assert.Contains("horizontal 21 / vertical 0, placement size 16x19", english, StringComparison.Ordinal);
         Assert.DoesNotContain("正面", english, StringComparison.Ordinal);
 
-        // The fifth key takes the facing's own spelling first, so its numbers sit one place along.
-        // A layout may name its facings anything, and that name is quoted back rather than
+        // The named-facing key takes the facing's own spelling first, so its numbers sit one place
+        // along. A layout may name its facings anything, and that name is quoted back rather than
         // translated - it came from the user's file.
         Assert.Contains(
             "horizontal 1 / vertical 2, placement size 3x4",

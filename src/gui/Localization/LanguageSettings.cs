@@ -19,8 +19,9 @@ internal sealed record StoredSettings(
 /// <summary>
 /// Reads and writes the settings file.
 ///
-/// Exceptions never escape. A settings file that cannot be read or written must not stop the
-/// application from starting or from working with its defaults.
+/// Exceptions never escape from reading or writing; GetPath alone throws, when the redirect
+/// variable holds nothing but white space. A settings file that cannot be read or written must
+/// not stop the application from starting or from working with its defaults.
 /// </summary>
 internal static class SettingsFile
 {
@@ -200,7 +201,8 @@ internal static class SettingsFile
                     // name, both let every read succeed and every write fail, silently and for
                     // good. Choosing the game folder is the way out when detection finds nothing,
                     // so a save that can never land takes the last way out with it - the same
-                    // dead end A-37 was about, reached by a different road.
+                    // dead end as a settings file that cannot be read (see Update), reached by a
+                    // different road.
                     if (Directory.Exists(path))
                     {
                         Directory.Delete(path, recursive: true);
@@ -215,9 +217,9 @@ internal static class SettingsFile
             }
             catch
             {
-                // Take the half-finished file away rather than leaving settings.json.new sitting
-                // there for good. Under portable.txt that folder is the release folder the user
-                // actually looks at, and nothing else ever cleans it up.
+                // Take the half-finished file away rather than leaving settings.json.<pid>.new
+                // sitting there for good. Under portable.txt that folder is the release folder the
+                // user actually looks at, and nothing else ever cleans it up.
                 try
                 {
                     PathSafety.DeleteFile(staging);
@@ -280,9 +282,9 @@ internal static class SettingsFile
     /// The settings file path in a form that is safe to put in a message.
     ///
     /// GetPath throws when the redirect variable holds nothing but white space, and the callers
-    /// that report a save which did not land are the last ones that should be replaced by an
-    /// exception - that message is the only thing standing between the user and a screen that
-    /// never changes.
+    /// that report a save which did not land are the last ones whose message should be replaced
+    /// by an exception - that message is the only thing standing between the user and a screen
+    /// that never changes.
     ///
     /// Naming the variable in that case is the point rather than a fallback. A blank redirect
     /// makes every read come back unset and every write get discarded for the whole run, which

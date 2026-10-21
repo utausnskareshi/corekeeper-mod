@@ -1,7 +1,7 @@
 namespace CoreKeeperSkinTool.Install;
 
 /// <summary>
-/// A candidate folder that the mod reads its image from.
+/// A candidate mod settings folder, under which the mod reads each character's image.
 /// </summary>
 /// <param name="ModsDirectory">The mods folder for one platform and user.</param>
 /// <param name="Platform">Platform name, such as Steam.</param>
@@ -36,9 +36,9 @@ public static class GameLocator
     /// Returns every per-user data folder the game has created.
     ///
     /// Kept separate from <see cref="FindModConfigLocations"/> because the characters live
-    /// beside the mods folder rather than inside it, and the mods folder only appears once a
-    /// mod has run. Looking for characters through the mods folder would report "no characters"
-    /// on a perfectly normal installation that has simply never loaded a mod.
+    /// beside the mods folder rather than inside it. The game creates that folder when it starts
+    /// (measured on 1.3.0.2), but the characters do not depend on it: looking for them through the
+    /// mods folder would report "no characters" for an account whose mods folder is missing.
     /// </summary>
     public static IReadOnlyList<UserDataDirectory> FindUserDataDirectories()
     {
@@ -120,7 +120,7 @@ public static class GameLocator
     /// <summary>
     /// Orders candidate settings folders, the one the game used last first.
     ///
-    /// Keyed on modsREADME.txt, which the game rewrites every time it starts (Manager.EarlyInit,
+    /// Keyed on mods\README.txt, which the game rewrites every time it starts (Manager.EarlyInit,
     /// measured on 1.3.0.2) and this tool never touches. The folder's own time was used before, but
     /// it moves whenever anything directly inside it is created or removed - this tool placing or
     /// removing CustomPlayerSkin included - so the account the tool had just written to came first,
@@ -304,7 +304,7 @@ public static class GameLocator
 
         void Add(string raw)
         {
-            // Separators inside the vdf are escaped twice
+            // Each separator inside the vdf is escaped, so it is written as two backslashes
             string path = raw.Replace(@"\\", @"\").Trim();
 
             if (path.Length > 0 && !found.Contains(path, StringComparer.OrdinalIgnoreCase))

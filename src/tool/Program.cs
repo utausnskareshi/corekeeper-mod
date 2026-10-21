@@ -217,7 +217,7 @@ public static class Program
         SheetLayout layout = LoadLayout(cmd);
 
         // An empty value reached the decoder, which said "入力画像が見つからない: " with nothing
-        // after it and no word of which option was empty - an unset shell variable is the usual way
+        // after it and no word of which option was empty - an unset shell variable is the usual cause
         RequireValueIfGiven(cmd, "input", "変換する画像のパスを指定すること。");
         string inputPath = cmd.GetRequiredString("input");
         string outputPath = RequirePath(cmd, "output", "skin.png");
@@ -239,8 +239,9 @@ public static class Program
         }
 
         // Only the output is checked against them. Naming the same picture twice is allowed and
-        // useful: passing the front to --side is how a drawing is kept from being mirrored on
-        // the right-facing frames, which is what the help says --side does.
+        // can be useful: passing the front to --back keeps its face on the back frames, which is
+        // what the help says --back does. (--side has no such use: this command never mirrors the
+        // front into the right-facing frames in the first place.)
 
         // Reject values that cannot mean anything rather than quietly ignoring them.
         // A --width of 0 used to fall back to the layout default, so a typo produced a
@@ -453,7 +454,7 @@ public static class Program
         Console.Error.WriteLine(
             "      向き別の絵は高さだけ正面に揃えるため、幅は制限されない。");
         Console.Error.WriteLine(
-            $"      コマ({cellWidth}px)に収めたいなら、正面より横長にならない絵を渡すこと。");
+            $"      配置幅に収めたいなら、正面より横長にならない絵を渡すこと（コマ {cellWidth}px を出た部分は描かれない）。");
     }
 
     // ----------------------------------------------------------------- install
@@ -709,15 +710,6 @@ public static class Program
     }
 
     /// <summary>
-    /// Refuses two options that name the same file.
-    ///
-    /// Writing the output over the input destroyed the original picture and said nothing about
-    /// it: the summary line reads "overwriting", which is true of any second run, so nothing on
-    /// screen distinguished replacing an old sheet from destroying the artwork it was made from.
-    /// With --quiet it printed nothing at all. The same applies to the template's two outputs,
-    /// where the guide landed on the blank template and only the guide survived.
-    /// </summary>
-    /// <summary>
     /// Reads one of the optional facings, or returns null when it was not given.
     ///
     /// A truncated file is reported the same way the front view's is. It matters more here, not
@@ -744,6 +736,15 @@ public static class Program
         return picture;
     }
 
+    /// <summary>
+    /// Refuses two options that name the same file.
+    ///
+    /// Writing the output over the input destroyed the original picture and said nothing about
+    /// it: the summary line reads "overwriting", which is true of any second run, so nothing on
+    /// screen distinguished replacing an old sheet from destroying the artwork it was made from.
+    /// With --quiet it printed nothing at all. The same applies to the template's two outputs,
+    /// where the guide landed on the blank template and only the guide survived.
+    /// </summary>
     private static void EnsureDifferentFiles(string first, string second, string firstName, string secondName)
     {
         string a;
@@ -1057,9 +1058,9 @@ public static class Program
             ? "警告: 動作を保証できないバージョン。"
             : "警告: ゲームのバージョンを確認できなかったため、対応バージョンか判断できない。");
 
-        Console.Error.WriteLine($"  ゲームの場所      : {game}");
-        Console.Error.WriteLine($"  このPCのバージョン: {check.Version ?? "(読み取れず)"}");
-        Console.Error.WriteLine($"  対応バージョン    : {GameVersion.DescribeSupported(check.Supported)}");
+        Console.Error.WriteLine($"  ゲームの場所        : {game}");
+        Console.Error.WriteLine($"  この PC のバージョン: {check.Version ?? "(読み取れず)"}");
+        Console.Error.WriteLine($"  対応バージョン      : {GameVersion.DescribeSupported(check.Supported)}");
         Console.Error.WriteLine("  見た目が崩れる、まったく反映されないといったことが起こり得る。");
         Console.Error.WriteLine("  重要なセーブデータは事前に控えを取ること。");
         Console.Error.WriteLine();
@@ -1167,7 +1168,7 @@ public static class Program
         if (File.Exists(outputPath) && !IsBlankImage(outputPath))
         {
             throw new ToolException(
-                $"--output の {outputPath} は既にあり、空のテンプレートではない（絵が描かれているか、画像として読めない）。" +
+                $"--output の {outputPath} はすでにあり、空のテンプレートではない（絵が描かれているか、画像として読めない）。" +
                 Environment.NewLine +
                 "  上書きすると元に戻せないため、別の名前を -o で指定するか、不要なら先に削除すること。");
         }
@@ -1486,7 +1487,7 @@ public static class Program
                                        右を向いた絵を渡すこと。左右反転はしない
                   --back <path>        背面のコマに使う絵                既定: 正面を流用
                                        指定すると顔隠しは行わない
-                                       側面・背面は正面と同じ高さに縮小され、
+                                       右向き・背面の絵は正面と同じ高さに縮小され、
                                        減色は3枚まとめて行うため色がずれない
                                        高さだけを揃えるので幅は制限されず、
                                        正面より横長の絵は --width の配置幅を超える
@@ -1496,7 +1497,7 @@ public static class Program
                        bob    = 変形させず位置だけ動かす
                        static = 全コマ同じ絵にする
                   --resample <mode>    smooth | nearest                  既定: smooth
-                                       既にドット絵なら nearest が向く
+                                       すでにドット絵なら nearest が向く
                   --remove-bg          四隅と地続きの背景を透過する
                   --bg-tolerance <n>   背景とみなす色の許容差 0-255       既定: 16
                   --alpha-threshold <n> 半透明を切り捨てる境目 0-255      既定: 128
@@ -1521,7 +1522,7 @@ public static class Program
                                        スロット番号か識別子をカンマ区切りで指定
                                        番号は --list が表示するスロット番号
                   --game-dir <path>    Core Keeper のインストール先を直接指定
-                                       （対応バージョンの確認に使う）
+                                       （対応バージョンと、MOD が入っているかの確認に使う）
                   --list               配置先とキャラクター一覧を表示するだけ
 
             template  自分で描くための空テンプレートとガイドを出力する

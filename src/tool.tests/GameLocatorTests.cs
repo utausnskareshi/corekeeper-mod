@@ -24,7 +24,7 @@ public sealed class GameLocatorTests : IDisposable
         }
     }
 
-    /// <summary>The format Steam writes today: one "path" per library, separators escaped twice.</summary>
+    /// <summary>The format Steam writes today: one "path" per library, each separator doubled.</summary>
     private const string CurrentFormat = """
         "libraryfolders"
         {
@@ -237,7 +237,7 @@ public sealed class GameLocatorTests : IDisposable
 
     /// <summary>
     /// "The one used last" has to mean the account the game last started with. The game rewrites
-    /// modsREADME.txt every time it starts (Manager.EarlyInit, measured on 1.3.0.2), and this tool
+    /// mods\README.txt every time it starts (Manager.EarlyInit, measured on 1.3.0.2), and this tool
     /// never touches that file. The folder's own time moves whenever anything directly inside it
     /// is created or removed - including this tool placing or removing CustomPlayerSkin - so
     /// ordering by it put the account the tool had just written to first, and after "Remove mod"

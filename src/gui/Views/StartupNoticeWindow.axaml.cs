@@ -63,7 +63,7 @@ public partial class StartupNoticeWindow : Window
         FolderButton.IsVisible = notice.OfferFolderChoice;
         FolderButton.Content = Inline("startup.chooseFolder");
 
-        // A fatal notice has nothing to accept, so the only way on is out
+        // A fatal notice has nothing to accept: choosing a folder, where offered, is the only way on
         AcceptButton.IsVisible = notice.Kind != StartupNoticeKind.Fatal;
 
         (string acceptKey, string declineKey) = notice.Kind switch

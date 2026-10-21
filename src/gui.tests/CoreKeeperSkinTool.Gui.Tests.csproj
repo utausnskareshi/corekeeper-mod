@@ -19,7 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Reference the GUI itself so the embedded language resources can be read -->
+    <!-- Reference the GUI itself, whose view models, localisation and start-up checks are under
+         test; the language files embedded in Core come with it -->
     <ProjectReference Include="..\gui\CoreKeeperSkinTool.Gui.csproj" />
   </ItemGroup>
 

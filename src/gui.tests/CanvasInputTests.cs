@@ -3,11 +3,11 @@ using System.Text.RegularExpressions;
 namespace CoreKeeperSkinTool.Gui.Tests;
 
 /// <summary>
-/// Checks two things about how the canvas starts and holds a stroke.
+/// Checks how the canvas starts, holds and calls off a stroke, and that the help says how.
 ///
 /// Read from the source, as the other checks on the window are: the canvas is an Avalonia
-/// control and needs a live platform to exist, and what these pin down is the order of
-/// statements inside two input handlers, which nothing driving it from outside could see.
+/// control and needs a live platform to exist, and what these pin down is mostly the order of
+/// statements inside the input handlers, which nothing driving it from outside could see.
 /// </summary>
 public sealed class CanvasInputTests
 {

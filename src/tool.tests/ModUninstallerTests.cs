@@ -96,7 +96,7 @@ public sealed class ModUninstallerTests : IDisposable
     [Fact]
     public void Execute_設定側を先に消す()
     {
-        // Deleting the image first lets a running game notice and revert the appearance
+        // Deleting the images first lets a running game notice and revert the appearance
         string game = CreateGameInstall();
         string mods = CreateModConfig();
         RemovalPlan plan = ModUninstaller.Plan(ModName, [game], [mods]);
@@ -290,8 +290,8 @@ public sealed class ModUninstallerTests : IDisposable
     {
         // Two spellings of one game folder reach Plan whenever the user has pointed at the game
         // by hand and detection finds the same place. Listing it twice doubles the file count on
-        // the confirmation screen, and Execute deletes it once and then reports the second entry
-        // as a failure, telling the user that a removal which in fact worked did not.
+        // the confirmation screen and shows one folder as two targets. Execute used to report the
+        // second entry as a failure too; a target gone since the plan is now skipped instead.
         CreateGameInstall();
         string game = Path.Combine(_root, "game");
 
@@ -329,12 +329,13 @@ public sealed class ModUninstallerTests : IDisposable
     [Fact]
     public void Plan_接合点ごしに同じフォルダを渡しても1件にまとめる()
     {
-        // A game folder reached through a junction is the same folder reached directly, but
-        // GetFullPath resolves "..", case and trailing separators and stops there - so the two
-        // spellings came out as different keys, the plan listed one folder twice, counted its
-        // files twice, and Execute reported the second deletion as a failure because the first
-        // had already removed it. Junctions are ordinary here: moving a Steam library and
-        // leaving a link behind is exactly how one appears.
+        // A game folder reached through a junction is the same folder reached directly.
+        // GetFullPath resolves "." and "..", and the comparison ignores case and trailing
+        // separators, but none of that follows a link - so the two spellings came out as
+        // different keys, the plan listed one folder twice, counted its files twice, and Execute
+        // reported the second deletion as a failure because the first had already removed it.
+        // Junctions are ordinary here: moving a Steam library and leaving a link behind is
+        // exactly how one appears.
         CreateGameInstall();
         string real = Path.Combine(_root, "game");
         string link = Path.Combine(_root, "linked");

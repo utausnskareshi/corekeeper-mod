@@ -68,8 +68,9 @@ public sealed class PresetTests
     {
         IReadOnlyList<FrameRect> sideFrames = [.. Layout.Frames.Where(f => f.Dir == "right")];
 
-        // Recipes only. A picture is placed the same way whichever direction the frame faces,
-        // so there is nothing here for it to differ by.
+        // Recipes only. The side-view cues are part of a recipe's drawing; a picture goes into
+        // the right-facing frames just as it goes into the front ones, so there is nothing here
+        // for it to differ by.
         foreach (PresetDefinition preset in Drawn)
         {
             using SKBitmap withCues = PresetCharacter.Build(Layout, Parts, preset, sideViewEnabled: true);
@@ -159,7 +160,7 @@ public sealed class PresetTests
     /// <summary>
     /// Every build option has to draw differently from the others, or a recipe declaring one is
     /// promising something it does not deliver. "wide" used to render identically to "normal",
-    /// which covered eleven of the shipped presets and a third of every random character.
+    /// which covered eleven of the shipped presets and a third of all random characters.
     ///
     /// Blob bodies are checked as well. They took no notice of the build at all, so slime and
     /// frog ("wide") and ghost ("normal") drew the same pixels whatever they declared — and the

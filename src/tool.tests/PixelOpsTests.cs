@@ -152,7 +152,7 @@ public sealed class PixelOpsTests
     public void RemoveBackground_許容差の範囲内なら近い色もまとめて消える()
     {
         using SKBitmap source = Solid(4, 4, SKColors.White);
-        Set(source, 1, 1, new SKColor(250, 250, 250));  // ほぼ白
+        Set(source, 1, 1, new SKColor(250, 250, 250));  // almost white
 
         using SKBitmap result = PixelOps.RemoveBackground(source, tolerance: 10);
 
@@ -226,7 +226,7 @@ public sealed class PixelOpsTests
 
         Assert.True(result.Width <= 16, $"幅が箱を超えた: {result.Width}");
         Assert.True(result.Height <= 19, $"高さが箱を超えた: {result.Height}");
-        // The input is tall, so height hits the limit and width ends up at half the ratio
+        // The input is tall (1:2), so height hits the limit and width comes out at half: 9.5 -> 10
         Assert.Equal(19, result.Height);
         Assert.Equal(10, result.Width);
     }
@@ -740,8 +740,9 @@ public sealed class PixelOpsTests
     /// </summary>
     private static string WriteQuadrantJpeg(string path, SKEncodedOrigin origin)
     {
-        // Stored 80 wide by 40 high: red, green, blue, white clockwise from the top left. Larger
-        // than it needs to be so every sample sits well clear of a boundary, where JPEG rings.
+        // Stored 80 wide by 40 high: red, green, blue, white in reading order from the top left.
+        // Larger than it needs to be so every sample sits well clear of a boundary, where JPEG
+        // rings.
         using SKBitmap stored = PixelOps.CreateEmpty(80, 40);
         SKColor[] pixels = stored.Pixels;
         for (int y = 0; y < 40; y++)
